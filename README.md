@@ -24,7 +24,10 @@ npm run dev
 
 ```env
 VITE_KAKAO_MAP_KEY=your_javascript_key
+VITE_API_BASE_URL=http://localhost:8000
 ```
+
+`VITE_API_BASE_URL`에는 FastAPI 서버 주소를 입력합니다. 프론트엔드는 `docs/api_spec.md`의 `/api/tours`, `/api/posts`, `/api/chat` 명세와 공통 응답 형식을 사용합니다. 백엔드가 연결되지 않은 로컬 개발 환경에서는 지도와 게시판 미리보기만 내장 예시 데이터로 표시됩니다.
 
 카카오 개발자 콘솔의 플랫폼 설정에 로컬 및 배포 도메인을 등록해야 합니다. 키가 없는 환경에서는 지도 영역에 설정 안내 화면이 표시되며, 나머지 UI는 정상 동작합니다.
 

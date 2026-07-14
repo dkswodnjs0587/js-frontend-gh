@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
+import { sendChat } from './services/api'
 
 const isDark = ref(false)
 const menuOpen = ref(false)
@@ -16,16 +17,20 @@ watch(isDark, (value) => {
   localStorage.setItem('localhub-theme', value ? 'dark' : 'light')
 }, { immediate: true })
 
-function sendMessage() {
+async function sendMessage() {
   const text = chatText.value.trim()
   if (!text || isBotTyping.value) return
   messages.value.push({ from: 'user', text })
   chatText.value = ''
   isBotTyping.value = true
-  setTimeout(() => {
-    messages.value.push({ from: 'bot', text: '좋아요! 서울 데이터에서 어울리는 장소를 찾아볼게요. 챗봇 API가 연결되면 더 정확한 답변을 드릴 수 있어요.' })
+  try {
+    const data = await sendChat(text, {})
+    messages.value.push({ from: 'bot', text: data.answer })
+  } catch (error) {
+    messages.value.push({ from: 'bot', text: error.unavailable ? '지금은 쓰프와 연결이 어렵습니다. 잠시 후 다시 물어봐 주세요.' : error.message })
+  } finally {
     isBotTyping.value = false
-  }, 1100)
+  }
 }
 </script>
 

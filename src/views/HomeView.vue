@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { getAllTours } from '../services/api'
 
 const categories = [
   { id: '12', label: '관광지', icon: '⌖', color: '#ff7b6b', file: '서울_관광지.json' },
@@ -21,13 +22,31 @@ const filterOpen = ref(false)
 const districtOpen = ref(false)
 const districtMode = ref('map')
 const districtShapes = ref([])
+const pendingSsafy = ref(false)
+const easterMode = ref(false)
+const searchType = ref('title')
+const searchQuery = ref('')
+const searchDraft = ref('')
+const searchModeOpen = ref(false)
 let map
 let clusterer
 let markers = []
 let activeInfo
+let ssafyMarker
+let ssafyInfo
 const markerImages = new Map()
 
-const filteredPlaces = computed(() => places.value.filter(place => selected.value.includes(place.type) && (!selectedDistricts.value.length || selectedDistricts.value.some(district => place.address.includes(district)))))
+const filteredPlaces = computed(() => {
+  if (easterMode.value) return []
+  const keyword = searchQuery.value.trim().toLocaleLowerCase()
+  return places.value.filter(place => {
+    const categoryMatch = selected.value.includes(place.type)
+    const districtMatch = !selectedDistricts.value.length || selectedDistricts.value.some(district => place.address.includes(district))
+    const target = searchType.value === 'title' ? place.title : place.address
+    const searchMatch = !keyword || String(target || '').toLocaleLowerCase().includes(keyword)
+    return categoryMatch && districtMatch && searchMatch
+  })
+})
 const posts = [
   { id: 1, category: '관광지', color: '#ff7b6b', title: '이번 주말, 한강 피크닉 어디가 좋을까요?', content: '조용하고 노을 보기 좋은 한강공원을 찾고 있어요. 돗자리 펴기 좋은 곳 추천해주세요!', time: '12분 전', comments: 8 },
   { id: 2, category: '축제·공연', color: '#f3ab35', title: '서울숲 야외 공연 다녀오신 분?', content: '이번 주 공연 분위기랑 근처에서 저녁 먹기 좋은 곳도 궁금해요.', time: '34분 전', comments: 5 },
@@ -39,9 +58,50 @@ function toggleCategory(id) {
 }
 
 function toggleDistrict(district) {
+  pendingSsafy.value = false
   selectedDistricts.value = selectedDistricts.value.includes(district)
     ? selectedDistricts.value.filter(value => value !== district)
     : [...selectedDistricts.value, district]
+}
+
+function selectAllDistricts() {
+  pendingSsafy.value = false
+  selectedDistricts.value = []
+}
+
+function resetDistrictSelection() {
+  pendingSsafy.value = false
+  selectedDistricts.value = []
+}
+
+function chooseSearchType(type) {
+  searchType.value = type
+  searchModeOpen.value = false
+}
+
+function applySearch() {
+  searchQuery.value = searchDraft.value.trim()
+}
+
+function clearSearch() {
+  searchDraft.value = ''
+  searchQuery.value = ''
+}
+
+function prepareSsafy() {
+  pendingSsafy.value = true
+}
+
+function confirmDistrictSelection() {
+  if (pendingSsafy.value) {
+    revealSsafy()
+    return
+  }
+  easterMode.value = false
+  ssafyInfo?.close()
+  ssafyMarker?.setMap(null)
+  drawMarkers()
+  districtOpen.value = false
 }
 
 async function loadDistrictShapes() {
@@ -102,6 +162,31 @@ function transparentMarkerImage() {
 function zoomIn() { if (map) map.setLevel(Math.max(1, map.getLevel() - 1), { animate: true }) }
 function zoomOut() { if (map) map.setLevel(Math.min(14, map.getLevel() + 1), { animate: true }) }
 
+function revealSsafy() {
+  if (!map || !window.kakao) return
+  easterMode.value = true
+  pendingSsafy.value = false
+  drawMarkers()
+  const position = new window.kakao.maps.LatLng(37.5012748, 127.039625)
+  if (!ssafyMarker) {
+    ssafyMarker = new window.kakao.maps.Marker({ map, position, title: 'SSAFY 서울캠퍼스', image: markerImage('#181818'), zIndex: 9 })
+    ssafyInfo = new window.kakao.maps.InfoWindow({ content: '<div class="map-info ssafy-info"><div class="map-info-body"><span style="--place-color:#181818">SSAFY EASTER EGG</span><b>SSAFY 서울캠퍼스</b><p>서울특별시 강남구 테헤란로 212<br>멀티캠퍼스 역삼</p></div></div>' })
+    window.kakao.maps.event.addListener(ssafyMarker, 'click', () => {
+      activeInfo?.close()
+      activeInfo = ssafyInfo
+      ssafyInfo.open(map, ssafyMarker)
+    })
+  }
+  ssafyMarker.setMap(map)
+  districtOpen.value = false
+  // 이스터에그는 선택 즉시 멀티캠퍼스 주변이 한눈에 보이도록 이동한다.
+  map.setLevel(3)
+  map.setCenter(new window.kakao.maps.LatLng(37.50185, 127.039625))
+  activeInfo?.close()
+  activeInfo = ssafyInfo
+  ssafyInfo.open(map, ssafyMarker)
+}
+
 function loadKakao() {
   return new Promise((resolve, reject) => {
     if (window.kakao?.maps) return window.kakao.maps.load(resolve)
@@ -131,20 +216,23 @@ function drawMarkers() {
   markers = [...addressGroups.values()].flatMap(group => {
     const place = group[0]
     const marker = new window.kakao.maps.Marker({ position: new window.kakao.maps.LatLng(place.lat, place.lng), title: group.length > 1 ? `${place.title} 외 ${group.length - 1}곳` : place.title, image: markerImage(place.color) })
-    const thumbnailPlace = group.find(item => item.thumbnail) || place
-    const thumbnail = thumbnailPlace.thumbnail ? `<img src="${escapeHtml(thumbnailPlace.thumbnail)}" alt="" onerror="this.parentElement.classList.add('image-missing');this.remove()">` : '<div class="map-info-placeholder">사진 준비 중</div>'
-    const placeList = group.map(item => `<div class="map-info-place"><span style="--place-color:${item.color}">${escapeHtml(item.category)}</span><b>${escapeHtml(item.title)}</b></div>`).join('')
-    const countLabel = group.length > 1 ? `<small>같은 주소의 장소 ${group.length}곳</small>` : ''
-    const info = new window.kakao.maps.InfoWindow({ removable: false, content: `<div class="map-info map-info-group">${thumbnail}<div class="map-info-body">${countLabel}<div class="map-info-list">${placeList}</div><p>${escapeHtml(place.address || '주소 정보 없음')}</p></div></div>` })
+    let info
     window.kakao.maps.event.addListener(marker, 'click', () => {
       activeInfo?.close()
+      if (!info) {
+        const thumbnailPlace = group.find(item => item.thumbnail) || place
+        const thumbnail = thumbnailPlace.thumbnail ? `<img src="${escapeHtml(thumbnailPlace.thumbnail)}" alt="" onerror="this.parentElement.classList.add('image-missing');this.remove()">` : '<div class="map-info-placeholder">사진 준비 중</div>'
+        const placeList = group.map(item => `<div class="map-info-place"><span style="--place-color:${item.color}">${escapeHtml(item.category)}</span><b>${escapeHtml(item.title)}</b></div>`).join('')
+        const countLabel = group.length > 1 ? `<small>같은 주소의 장소 ${group.length}곳</small>` : ''
+        info = new window.kakao.maps.InfoWindow({ removable: false, content: `<div class="map-info map-info-group">${thumbnail}<div class="map-info-body">${countLabel}<div class="map-info-list">${placeList}</div><p>${escapeHtml(place.address || '주소 정보 없음')}</p></div></div>` })
+      }
       activeInfo = info
       info.open(map, marker)
     })
     const countMarkers = Array.from({ length: group.length - 1 }, () => new window.kakao.maps.Marker({ position: marker.getPosition(), image: transparentMarkerImage(), clickable: false, zIndex: -1 }))
     return [marker, ...countMarkers]
   })
-  clusterer = new window.kakao.maps.MarkerClusterer({ map, averageCenter: true, minLevel: 3, minClusterSize: 2, gridSize: 110, disableClickZoom: false, calculator: [10, 50, 100], styles: [
+  if (!clusterer) clusterer = new window.kakao.maps.MarkerClusterer({ map, averageCenter: true, minLevel: 3, minClusterSize: 2, gridSize: 110, disableClickZoom: false, calculator: [10, 50, 100], styles: [
     { width:'42px', height:'42px', background:'#ffd7d1', border:'3px solid #fff7f3', borderRadius:'21px', color:'#814b45', textAlign:'center', fontWeight:'900', lineHeight:'36px', boxShadow:'0 6px 16px #70534d33' },
     { width:'48px', height:'48px', background:'#d8d4ff', border:'3px solid #f8f6ff', borderRadius:'24px', color:'#524b93', textAlign:'center', fontWeight:'900', lineHeight:'42px', boxShadow:'0 6px 16px #524b9333' },
     { width:'54px', height:'54px', background:'#c8eadf', border:'3px solid #f2fff9', borderRadius:'27px', color:'#39705f', textAlign:'center', fontWeight:'900', lineHeight:'48px', boxShadow:'0 6px 16px #39705f33' },
@@ -157,11 +245,33 @@ function drawMarkers() {
 async function init() {
   loadDistrictShapes().catch(() => {})
   try {
-    const loaded = await Promise.all(categories.map(async category => {
-      const json = await fetch(`/${category.file}`).then(r => { if (!r.ok) throw new Error(); return r.json() })
-      return json.items.map(item => ({ id: item.contentid, title: item.title, address: item.addr1, tel: item.tel, thumbnail: item.firstimage2 || item.firstimage, lat: Number(item.mapy), lng: Number(item.mapx), type: category.id, category: category.label, color: category.color })).filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng))
-    }))
-    places.value = loaded.flat()
+    let items
+    try {
+      items = await getAllTours()
+    } catch (error) {
+      if (!error.unavailable) throw error
+      const loaded = await Promise.all(categories.map(async category => {
+        const json = await fetch(`/${category.file}`).then(r => { if (!r.ok) throw new Error(); return r.json() })
+        return json.items
+      }))
+      items = loaded.flat()
+    }
+    places.value = items.map(item => {
+      const type = String(item.contentTypeId ?? item.contenttypeid ?? '')
+      const category = categories.find(value => value.id === type)
+      return {
+        id: item.id ?? item.contentid,
+        title: item.title,
+        address: item.add1 ?? item.addr1 ?? '',
+        tel: item.tel ?? '',
+        thumbnail: item.firstimage2 || item.firstimage || '',
+        lat: Number(item.mapy),
+        lng: Number(item.mapx),
+        type,
+        category: category?.label || '기타',
+        color: category?.color || '#6973c7',
+      }
+    }).filter(place => categories.some(category => category.id === place.type) && Number.isFinite(place.lat) && Number.isFinite(place.lng))
   } catch { mapError.value = '서울 장소 데이터를 불러오지 못했습니다.' }
   loading.value = false
   await nextTick()
@@ -173,7 +283,12 @@ async function init() {
   } catch (error) { mapError.value = error.message }
 }
 
+let searchTimer
 watch([selected, selectedDistricts], drawMarkers)
+watch(searchQuery, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(drawMarkers, 180)
+})
 onMounted(init)
 </script>
 
@@ -192,6 +307,12 @@ onMounted(init)
       </div>
       <div class="map-zoom" aria-label="지도 확대 축소"><button @click="zoomIn" aria-label="지도 확대">＋</button><button @click="zoomOut" aria-label="지도 축소">−</button></div>
       <button class="district-trigger" @click="districtOpen = true"><span>⌖</span><strong>{{ selectedDistricts.length ? `지역 ${selectedDistricts.length}곳` : '지역 선택' }}</strong><i>›</i></button>
+      <form class="map-search" @submit.prevent="applySearch">
+        <span class="search-mode-wrap"><button type="button" class="search-mode" @click="searchModeOpen = !searchModeOpen" :aria-expanded="searchModeOpen"><strong>{{ searchType === 'title' ? '장소명' : '주소' }}</strong><i>{{ searchModeOpen ? '⌃' : '⌄' }}</i></button><span v-if="searchModeOpen" class="search-mode-menu"><button type="button" :class="{ active: searchType === 'title' }" @click="chooseSearchType('title')">장소명</button><button type="button" :class="{ active: searchType === 'address' }" @click="chooseSearchType('address')">주소</button></span></span>
+        <input v-model="searchDraft" :placeholder="searchType === 'title' ? '장소명을 검색해보세요' : '주소를 검색해보세요'" />
+        <button v-if="searchDraft || searchQuery" type="button" class="search-clear" @click="clearSearch" aria-label="검색어 지우기">×</button>
+        <button type="submit" class="search-submit">검색</button>
+      </form>
       <aside :class="['map-filter', { open: filterOpen }]">
         <button class="filter-toggle" @click="filterOpen = !filterOpen" :aria-expanded="filterOpen"><span>◉</span> 카테고리 <b>{{ selected.length }}</b><i>{{ filterOpen ? '⌃' : '⌄' }}</i></button>
         <div class="filter-content"><div class="filter-head"><strong>어떤 곳을 찾으세요?</strong><button @click="selected = categories.map(c => c.id)">전체 선택</button></div><button v-for="category in categories" :key="category.id" :class="['filter-chip', { active: selected.includes(category.id) }]" @click="toggleCategory(category.id)"><span class="category-icon" :style="{ background: category.color }">{{ category.icon }}</span>{{ category.label }}<i>{{ selected.includes(category.id) ? '✓' : '' }}</i></button></div>
@@ -207,8 +328,8 @@ onMounted(init)
             <g class="district-label-layer" aria-hidden="true"><text v-for="shape in districtShapes" :key="shape.name" :class="{ active: selectedDistricts.includes(shape.name) }" :x="shape.labelX" :y="shape.labelY">{{ shape.name }}</text></g>
           </svg>
         </div>
-        <div v-else class="district-grid"><button :class="{ active: !selectedDistricts.length }" @click="selectedDistricts = []">서울 전체</button><button v-for="district in districts" :key="district" :class="{ active: selectedDistricts.includes(district) }" @click="toggleDistrict(district)">{{ district }}</button></div>
-        <div class="district-actions"><span>{{ selectedDistricts.length ? `${selectedDistricts.length}개 지역 선택됨` : '서울 전체가 선택됨' }}</span><button class="primary-button" @click="districtOpen = false">선택 완료</button></div>
+        <div v-else class="district-grid"><button :class="{ active: !selectedDistricts.length && !pendingSsafy }" @click="selectAllDistricts">서울 전체</button><button v-for="district in districts" :key="district" :class="{ active: selectedDistricts.includes(district) && !pendingSsafy }" @click="toggleDistrict(district)">{{ district }}</button><button class="ssafy-easter-egg" aria-label="숨겨진 SSAFY 위치" @click="prepareSsafy"></button></div>
+        <div class="district-actions"><span>{{ pendingSsafy ? '???' : selectedDistricts.length ? `${selectedDistricts.length}개 지역 선택됨` : '서울 전체가 선택됨' }}</span><div><button class="district-reset" @click="resetDistrictSelection">초기화</button><button class="primary-button" @click="confirmDistrictSelection">선택 완료</button></div></div>
       </section>
       <div class="map-hint">마커를 누르면 장소 정보를 볼 수 있어요</div>
     </div>
