@@ -172,3 +172,16 @@ footer{background:#242842;color:#f7f5ff}.footer-brand p,.copyright{color:#b9bdd3
 /* 데스크톱 튜토리얼 마지막 단계: 설명 상자에서 우측 하단 챗봇으로 안내 */
 @media(min-width:851px){.tutorial-guide.chatbot-step:after,.community-tutorial-guide.chatbot-step:after{content:'';position:absolute;left:calc(100% + 12px);bottom:31px;width:max(46px,calc(50vw - 350px));height:3px;border-radius:99px;background:var(--primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 12%,transparent);pointer-events:none}.tutorial-guide.chatbot-step:before,.community-tutorial-guide.chatbot-step:before{content:'';position:absolute;left:calc(100% + max(58px,calc(50vw - 338px)));bottom:24px;border-top:8px solid transparent;border-bottom:8px solid transparent;border-left:12px solid var(--primary);filter:drop-shadow(0 2px 2px color-mix(in srgb,var(--primary) 28%,transparent));pointer-events:none}}
 .bubble .chat-tutorial-choices{flex-direction:column}.bubble .chat-tutorial-choices>button:not(.chat-choice-close){width:100%;flex:none;text-align:left}
+
+/* Festival calendar theme palettes */
+:root[data-theme=dark] .festival-page{--festival-0:#4fa183;--festival-1:#d5b84f;--festival-2:#61afd3;--festival-3:#4f82c8;--festival-4:#465a91;--festival-5:#806bc4}
+:root[data-theme=dark] .festival-page .festival-event.color-1{color:#302a12}
+:root[data-theme=dark] .festival-page .festival-event.color-3{color:#fff}
+:root[data-theme=dark] .festival-page .festival-help{border-color:#555d8b!important;background:#343957!important;color:#ddd7ff!important}
+:root[data-theme=dark] .festival-page .festival-help:hover{background:#41486d!important}
+:root[data-theme=dark] .festival-page .more-events-strip{background:#f0eef9;box-shadow:0 2px 9px rgba(0,0,0,.4)}
+:root[data-theme=dark] .festival-page .more-events-strip button{color:#20243a}
+:root[data-theme=dark] .festival-page .more-events-strip button:hover{background:#d9d6e8}
+:root[data-theme=dark] .festival-page .more-events-strip button+button{border-left-color:#bbb8ca}
+:root[data-theme=dark] .festival-modal-backdrop{--festival-0:#4fa183;--festival-1:#d5b84f;--festival-2:#61afd3;--festival-3:#4f82c8;--festival-4:#465a91;--festival-5:#806bc4}
+:root[data-theme=dark] .district-select-modal>footer{background:transparent;color:var(--muted)}
