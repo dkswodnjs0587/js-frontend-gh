@@ -49,19 +49,7 @@ watch(messages, (value) => {
 watch(chatOpen, (value) => { if (value) scrollToLatest() })
 
 async function revealBotMessage(text, actions = null) {
-  isBotRevealing.value = true
-  const message = { from: 'bot', text: '', actions }
-  messages.value.push(message)
-  const answer = String(text || '')
-  const characters = typeof Intl.Segmenter === 'function'
-    ? [...new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(answer)].map(segment => segment.segment)
-    : Array.from(answer)
-  for (const character of characters) {
-    message.text += character
-    const pause = character === '\n' ? 65 : /[.!?。！？]/.test(character) ? 45 : /[,，]/.test(character) ? 28 : 14
-    await new Promise(resolve => setTimeout(resolve, pause))
-  }
-  isBotRevealing.value = false
+  messages.value.push({ from: 'bot', text: String(text || ''), actions })
 }
 
 async function requestBotAnswer(text) {
@@ -72,14 +60,7 @@ async function requestBotAnswer(text) {
     await sendChatStream(text, {}, {
       async onToken(token) {
         isBotRevealing.value = true
-        const characters = typeof Intl.Segmenter === 'function'
-          ? [...new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(token)].map(segment => segment.segment)
-          : Array.from(token)
-        for (const character of characters) {
-          streamMessage.text += character
-          const pause = character === '\n' ? 65 : /[.!?。！？]/.test(character) ? 45 : /[,，]/.test(character) ? 28 : 14
-          await new Promise(resolve => setTimeout(resolve, pause))
-        }
+        streamMessage.text += token
       },
     })
   } catch (error) {
