@@ -120,7 +120,7 @@ function toggleChat() {
         <span class="brand-mark">L</span>
         <span>LocalHub <b>Seoul</b></span>
       </router-link>
-      <button class="icon-button mobile-menu" @click="menuOpen = !menuOpen" aria-label="메뉴 열기">☰</button>
+      <button :class="['icon-button', 'mobile-menu', { open: menuOpen }]" @click="menuOpen = !menuOpen" :aria-label="menuOpen ? '메뉴 닫기' : '메뉴 열기'" :aria-expanded="menuOpen"><span></span><span></span><span></span></button>
       <nav :class="{ open: menuOpen }" @click="menuOpen = false">
         <router-link to="/">동네 탐색</router-link>
         <router-link to="/community">이야기 광장</router-link>
@@ -129,6 +129,7 @@ function toggleChat() {
         <span class="theme-thumb">{{ isDark ? '☾' : '☀' }}</span>
       </button>
     </header>
+    <transition name="menu-fade"><button v-if="menuOpen" class="mobile-menu-backdrop" aria-label="메뉴 닫기" @click="menuOpen = false"></button></transition>
 
     <main><router-view /></main>
 

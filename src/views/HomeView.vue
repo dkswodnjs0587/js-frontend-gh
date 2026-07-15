@@ -478,7 +478,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="hero">
-    <div class="hero-copy"><span class="eyebrow">서울을 더 가까이</span><h1>오늘, 서울 어디로<br><em>가볼까요?</em></h1><p>관광 명소부터 동네 주민의 생생한 이야기까지.<br>서울의 모든 순간을 한곳에서 만나보세요.</p><a href="#map" class="primary-button" @click.prevent="startTutorial">서울 탐색 시작하기 <span>↓</span></a></div>
+    <div class="hero-copy"><span class="eyebrow">서울을 더 가까이</span><h1>오늘, 서울 어디로<br> <em>가볼까요?</em></h1><p>관광 명소부터 동네 주민의 생생한 이야기까지.<br>서울의 모든 순간을 한곳에서 만나보세요.</p><a href="#map" class="primary-button" @click.prevent="startTutorial">서울 탐색 시작하기 <span>↓</span></a></div>
     <div class="hero-art seoul-social-art">
       <article v-for="card in [{ id:'tower', label:'남산타워' }, { id:'gate', label:'광화문' }, { id:'food', label:'비빔밥' }, { id:'hanbok', label:'한복 여행' }]" :key="card.id" :class="['social-card', `social-${card.id}`]">
         <div :class="['social-photo', `photo-${card.id}`]" role="img" :aria-label="card.label"></div>
@@ -532,7 +532,7 @@ onBeforeUnmount(() => {
   </section>
 
   <div v-if="tutorialActive" class="tutorial-backdrop" aria-hidden="true" @click="nextTutorialStep"></div>
-  <aside v-if="tutorialActive" class="tutorial-guide" role="dialog" aria-live="polite" aria-label="사이트 이용 튜토리얼">
+  <aside v-if="tutorialActive" :class="['tutorial-guide', { 'chatbot-step': tutorialSteps[tutorialStep].target === 'chatbot' }]" role="dialog" aria-live="polite" aria-label="사이트 이용 튜토리얼">
     <button class="tutorial-close" @click="finishTutorial" aria-label="튜토리얼 닫기"><kbd>Esc</kbd><span>×</span></button>
     <span class="eyebrow">{{ tutorialSteps[tutorialStep].eyebrow }}</span>
     <h3>{{ tutorialSteps[tutorialStep].title }}</h3>
