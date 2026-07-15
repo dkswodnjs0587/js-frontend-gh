@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getPosts, getTour } from '../services/api'
+import { getPosts, getTour, getTours } from '../services/api'
 import { formatPostTime } from '../utils/date'
 
 const categories = [
@@ -418,11 +418,29 @@ async function init() {
   loadRecentPosts()
   try {
     const loaded = await Promise.all(categories.map(async category => {
-      const json = await fetch(`/${category.file}`).then(response => { if (!response.ok) throw new Error(); return response.json() })
-      return json.items
+      const items = []
+      const size = 500
+      let page = 1
+      let totalPages = 1
+      do {
+        const data = await getTours({ contentTypeId: category.id, page, size })
+        items.push(...(data?.items || []))
+        totalPages = Number(data?.totalPages || 1)
+        page += 1
+      } while (page <= totalPages)
+      return items
     }))
     places.value = loaded.flat().map(item => normalizePlace(item)).filter(place => categories.some(category => category.id === place.type) && Number.isFinite(place.lat) && Number.isFinite(place.lng))
-  } catch { mapError.value = '서울 장소 데이터를 불러오지 못했습니다.' }
+    if (!places.value.length) throw new Error('empty tours')
+  } catch {
+    try {
+      const loaded = await Promise.all(categories.map(async category => {
+        const json = await fetch(`/${category.file}`).then(response => { if (!response.ok) throw new Error(); return response.json() })
+        return json.items
+      }))
+      places.value = loaded.flat().map(item => normalizePlace(item)).filter(place => categories.some(category => category.id === place.type) && Number.isFinite(place.lat) && Number.isFinite(place.lng))
+    } catch { mapError.value = '서울 장소 데이터를 불러오지 못했습니다.' }
+  }
   loading.value = false
   await nextTick()
   try {

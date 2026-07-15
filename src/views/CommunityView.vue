@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPosts } from '../services/api'
 import { formatPostTime } from '../utils/date'
@@ -40,6 +40,7 @@ const fallbackPosts = [
 ]
 const posts = ref(fallbackPosts)
 const categoryById = { 12: '관광지', 14: '문화시설', 15: '축제·공연', 25: '여행코스', 28: '레포츠', 32: '숙박', 38: '쇼핑' }
+const categoryIdByLabel = Object.fromEntries(Object.entries(categoryById).map(([id, label]) => [label, id]))
 const filtered = computed(() => posts.value.filter(p => (active.value === '전체' || p.category === active.value) && (`${p.title} ${p.content}`.includes(query.value))))
 const categoryColor = label => categories.find(category => category.label === label)?.color || '#6973c7'
 
@@ -82,9 +83,18 @@ function handleTutorialKeydown(event) {
   if (event.key === 'Backspace' && tutorialStep.value > 0) { event.preventDefault(); previousTutorialStep() }
 }
 
-onMounted(async () => {
+let postRequestId = 0
+let postSearchTimer
+async function loadPosts() {
+  const requestId = ++postRequestId
   try {
-    const data = await getPosts({ page: 1, size: 100 })
+    const data = await getPosts({
+      contentTypeId: categoryIdByLabel[active.value],
+      keyword: query.value.trim(),
+      page: 1,
+      size: 100,
+    })
+    if (requestId !== postRequestId) return
     posts.value = (data?.items || []).sort((a, b) => new Date(b.createdtime) - new Date(a.createdtime)).map(post => ({
       ...post,
       category: categoryById[post.contentTypeId] || '관광지',
@@ -93,10 +103,15 @@ onMounted(async () => {
   } catch (error) {
     if (!error.unavailable) console.warn(error.message)
   }
+}
+watch([query, active], () => {
+  clearTimeout(postSearchTimer)
+  postSearchTimer = setTimeout(loadPosts, 220)
 })
+onMounted(loadPosts)
 onMounted(() => { window.addEventListener('keydown', handleTutorialKeydown); window.addEventListener('localhub:start-community-tutorial', startTutorial) })
 onMounted(() => { if (route.query.tutorial === 'chatbot') { tutorialActive.value = true; showTutorialStep(4); router.replace('/community') } })
-onBeforeUnmount(() => { window.removeEventListener('keydown', handleTutorialKeydown); window.removeEventListener('localhub:start-community-tutorial', startTutorial); finishTutorial() })
+onBeforeUnmount(() => { clearTimeout(postSearchTimer); window.removeEventListener('keydown', handleTutorialKeydown); window.removeEventListener('localhub:start-community-tutorial', startTutorial); finishTutorial() })
 </script>
 <template>
   <div class="subpage page-section">
