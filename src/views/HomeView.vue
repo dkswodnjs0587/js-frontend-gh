@@ -419,7 +419,7 @@ async function init() {
   try {
     const loaded = await Promise.all(categories.map(async category => {
       const items = []
-      const size = 500
+      const size = 100
       let page = 1
       let totalPages = 1
       do {
