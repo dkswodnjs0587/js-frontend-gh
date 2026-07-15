@@ -166,6 +166,7 @@ function toggleChat() {
       <nav :class="{ open: menuOpen }" @click="menuOpen = false">
         <router-link to="/">동네 탐색</router-link>
         <router-link to="/community">이야기 광장</router-link>
+        <router-link to="/festivals">축제 캘린더</router-link>
       </nav>
       <button :class="['theme-toggle', { active: isDark }]" @click="isDark = !isDark" :aria-label="isDark ? '라이트 모드로 전환' : '다크 모드로 전환'" role="switch" :aria-checked="isDark">
         <span class="theme-thumb">{{ isDark ? '☾' : '☀' }}</span>

@@ -5,6 +5,7 @@ import HomeView from './views/HomeView.vue'
 import CommunityView from './views/CommunityView.vue'
 import WriteView from './views/WriteView.vue'
 import PostView from './views/PostView.vue'
+import FestivalCalendarView from './views/FestivalCalendarView.vue'
 import './styles.css'
 
 const router = createRouter({
@@ -14,6 +15,7 @@ const router = createRouter({
     { path: '/community', component: CommunityView },
     { path: '/write', component: WriteView },
     { path: '/posts/:id', component: PostView },
+    { path: '/festivals', component: FestivalCalendarView },
   ],
   scrollBehavior: () => ({ top: 0 }),
 })
