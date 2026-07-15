@@ -57,7 +57,7 @@ footer{background:#242842;color:#f7f5ff}.footer-brand p,.copyright{color:#b9bdd3
 @media(max-width:560px){.chat-panel{height:min(600px,calc(100vh - 110px))}}
 
 /* Responsive floating chat UI with a stable input area. */
-.chat-panel{max-height:calc(100dvh - 132px)}.chat-head,.chat-input{flex:0 0 auto}.chat-body{min-height:0;overscroll-behavior:contain;scroll-behavior:smooth}.chat-input input{min-width:0}
+.chat-panel{width:min(410px,calc(100vw - 32px));max-height:calc(100dvh - 132px)}.chat-head,.chat-input{flex:0 0 auto}.chat-body{min-height:0;overscroll-behavior:contain;scroll-behavior:smooth}.chat-input input{min-width:0}
 @media(max-width:560px){.chat-fab{right:14px;bottom:max(14px,env(safe-area-inset-bottom))}.chat-panel{left:10px;right:10px;bottom:calc(82px + env(safe-area-inset-bottom));width:auto;height:calc(100dvh - 104px - env(safe-area-inset-bottom));max-height:none;border-radius:20px}.chat-head{padding-top:max(14px,env(safe-area-inset-top))}.chat-input{padding-bottom:max(12px,env(safe-area-inset-bottom))}}
 
 /* Map place search */
