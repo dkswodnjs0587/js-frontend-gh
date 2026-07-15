@@ -45,6 +45,10 @@ async function request(path, { method = 'GET', body, signal } = {}) {
 
 export const getPosts = (params, options = {}) => request(`/posts${queryString(params)}`, options)
 export const getPost = postId => request(`/posts/${encodeURIComponent(postId)}`)
+export const likePost = (postId, liked) => request(`/posts/${encodeURIComponent(postId)}/like`, { method: 'POST', body: { liked } })
+export const getComments = postId => request(`/posts/${encodeURIComponent(postId)}/comments`)
+export const createComment = (postId, content, password) => request(`/posts/${encodeURIComponent(postId)}/comments`, { method: 'POST', body: { content, password } })
+export const deleteComment = (postId, commentId, password) => request(`/posts/${encodeURIComponent(postId)}/comments/${encodeURIComponent(commentId)}`, { method: 'DELETE', body: { password } })
 export const createPost = body => request('/posts', { method: 'POST', body })
 export const updatePost = (postId, body) => request(`/posts/${encodeURIComponent(postId)}`, { method: 'PUT', body })
 export const deletePost = (postId, password) => request(`/posts/${encodeURIComponent(postId)}`, { method: 'DELETE', body: { password } })
