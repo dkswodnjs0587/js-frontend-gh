@@ -418,33 +418,55 @@ function drawMarkers() {
   clusterer.redraw()
 }
 
+function normalizePlaces(items) {
+  return items
+    .map(item => normalizePlace(item))
+    .filter(place => categories.some(category => category.id === place.type) && Number.isFinite(place.lat) && Number.isFinite(place.lng))
+}
+
+async function loadBundledPlaces() {
+  const loaded = await Promise.all(categories.map(async category => {
+    const response = await fetch(`/${category.file}`)
+    if (!response.ok) throw new Error(`failed to load ${category.file}`)
+    const json = await response.json()
+    return json.items || []
+  }))
+  const result = normalizePlaces(loaded.flat())
+  if (!result.length) throw new Error('empty bundled tours')
+  return result
+}
+
+async function loadApiPlaces() {
+  const loaded = await Promise.all(categories.map(async category => {
+    const size = 100
+    const firstPage = await getTours({ contentTypeId: category.id, page: 1, size })
+    const items = [...(firstPage?.items || [])]
+    const totalPages = Number(firstPage?.totalPages || 1)
+    const batchSize = 5
+    for (let start = 2; start <= totalPages; start += batchSize) {
+      const pages = Array.from({ length: Math.min(batchSize, totalPages - start + 1) }, (_, index) => start + index)
+      const results = await Promise.all(pages.map(page => getTours({ contentTypeId: category.id, page, size })))
+      results.forEach(data => items.push(...(data?.items || [])))
+    }
+    return items
+  }))
+  const result = normalizePlaces(loaded.flat())
+  if (!result.length) throw new Error('empty api tours')
+  return result
+}
+
 async function init() {
   loadDistrictShapes().catch(() => {})
   loadRecentPosts()
   const kakaoPromise = loadKakao()
   try {
-    const loaded = await Promise.all(categories.map(async category => {
-      const size = 100
-      const firstPage = await getTours({ contentTypeId: category.id, page: 1, size })
-      const items = [...(firstPage?.items || [])]
-      const totalPages = Number(firstPage?.totalPages || 1)
-      const batchSize = 5
-      for (let start = 2; start <= totalPages; start += batchSize) {
-        const pages = Array.from({ length: Math.min(batchSize, totalPages - start + 1) }, (_, index) => start + index)
-        const results = await Promise.all(pages.map(page => getTours({ contentTypeId: category.id, page, size })))
-        results.forEach(data => items.push(...(data?.items || [])))
-      }
-      return items
-    }))
-    places.value = loaded.flat().map(item => normalizePlace(item)).filter(place => categories.some(category => category.id === place.type) && Number.isFinite(place.lat) && Number.isFinite(place.lng))
-    if (!places.value.length) throw new Error('empty tours')
+    // Netlify CDN에 함께 배포된 데이터로 지도를 먼저 표시한다.
+    // 장소 상세 정보는 마커를 클릭할 때 기존 API에서 가져온다.
+    places.value = await loadBundledPlaces()
   } catch {
     try {
-      const loaded = await Promise.all(categories.map(async category => {
-        const json = await fetch(`/${category.file}`).then(response => { if (!response.ok) throw new Error(); return response.json() })
-        return json.items
-      }))
-      places.value = loaded.flat().map(item => normalizePlace(item)).filter(place => categories.some(category => category.id === place.type) && Number.isFinite(place.lat) && Number.isFinite(place.lng))
+      // 정적 데이터가 없는 환경에서만 전체 API 조회를 대체 경로로 사용한다.
+      places.value = await loadApiPlaces()
     } catch { mapError.value = '서울 장소 데이터를 불러오지 못했습니다.' }
   }
   loading.value = false
