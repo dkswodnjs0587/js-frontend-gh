@@ -64,6 +64,7 @@ const filteredPlaces = computed(() => {
     return categoryMatch && districtMatch && searchMatch
   })
 })
+const allCategoriesSelected = computed(() => selected.value.length === categories.length)
 const fallbackPosts = [
   { id: 1, category: '관광지', color: '#ff7b6b', title: '이번 주말, 한강 피크닉 어디가 좋을까요?', content: '조용하고 노을 보기 좋은 한강공원을 찾고 있어요. 돗자리 펴기 좋은 곳 추천해주세요!', time: '12분 전', comments: 8 },
   { id: 2, category: '축제·공연', color: '#f3ab35', title: '서울숲 야외 공연 다녀오신 분?', content: '이번 주 공연 분위기랑 근처에서 저녁 먹기 좋은 곳도 궁금해요.', time: '34분 전', comments: 5 },
@@ -94,6 +95,10 @@ async function loadRecentPosts() {
 
 function toggleCategory(id) {
   selected.value = selected.value.includes(id) ? selected.value.filter(v => v !== id) : [...selected.value, id]
+}
+
+function toggleAllCategories() {
+  selected.value = allCategoriesSelected.value ? [] : categories.map(category => category.id)
 }
 
 function toggleDistrict(district) {
@@ -500,7 +505,7 @@ onBeforeUnmount(() => {
       </form>
       <aside :class="['map-filter', { open: filterOpen, 'tutorial-control-member': tutorialActive && tutorialSteps[tutorialStep].target === 'controls' }]">
         <button class="filter-toggle" @click="filterOpen = !filterOpen" :aria-expanded="filterOpen"><span>◉</span> 카테고리 <b>{{ selected.length }}</b><i>{{ filterOpen ? '⌃' : '⌄' }}</i></button>
-        <div class="filter-content"><div class="filter-head"><strong>어떤 곳을 찾으세요?</strong><button @click="selected = categories.map(c => c.id)">전체 선택</button></div><button v-for="category in categories" :key="category.id" :class="['filter-chip', { active: selected.includes(category.id) }]" @click="toggleCategory(category.id)"><span class="category-icon" :style="{ background: category.color }">{{ category.icon }}</span>{{ category.label }}<i>{{ selected.includes(category.id) ? '✓' : '' }}</i></button></div>
+        <div class="filter-content"><div class="filter-head"><strong>어떤 곳을 찾으세요?</strong><button @click="toggleAllCategories">{{ allCategoriesSelected ? '전체 취소' : '전체 선택' }}</button></div><button v-for="category in categories" :key="category.id" :class="['filter-chip', { active: selected.includes(category.id) }]" @click="toggleCategory(category.id)"><span class="category-icon" :style="{ background: category.color }">{{ category.icon }}</span>{{ category.label }}<i>{{ selected.includes(category.id) ? '✓' : '' }}</i></button></div>
       </aside>
       <section v-if="districtOpen" class="district-panel" aria-label="서울 지역 선택">
         <div class="district-head"><div><span class="eyebrow">SEOUL DISTRICT</span><h3>어느 지역을 볼까요?</h3><p>지도에서 원하는 자치구를 여러 곳 선택할 수 있어요.</p></div><button class="district-close" @click="districtOpen = false" aria-label="지역 선택 닫기">×</button></div>
