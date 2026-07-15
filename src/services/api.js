@@ -1,4 +1,6 @@
-const baseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const baseUrl = (import.meta.env.VITE_API_BASE_URL || '')
+  .replace(/\/+$/, '')
+  .replace(/\/docs$/, '')
 
 export class ApiError extends Error {
   constructor(message, { status = 0, unavailable = false } = {}) {

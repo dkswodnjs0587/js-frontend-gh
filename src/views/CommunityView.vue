@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getPosts } from '../services/api'
+import { getComments, getPosts } from '../services/api'
 import { formatPostTime } from '../utils/date'
 const query = ref('')
 const route = useRoute()
@@ -85,6 +85,21 @@ function handleTutorialKeydown(event) {
 
 let postRequestId = 0
 let postSearchTimer
+async function hydrateCommentCounts(items, requestId) {
+  const pending = items.filter(post => post.commentCount === null)
+  let cursor = 0
+  async function worker() {
+    while (cursor < pending.length) {
+      const post = pending[cursor++]
+      try {
+        const data = await getComments(post.id)
+        if (requestId === postRequestId) post.commentCount = Number(data?.total ?? data?.items?.length ?? 0)
+      } catch { if (requestId === postRequestId) post.commentCount = 0 }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(5, pending.length) }, worker))
+}
+
 async function loadPosts() {
   const requestId = ++postRequestId
   try {
@@ -101,8 +116,9 @@ async function loadPosts() {
       time: formatPostTime(post.createdtime),
       viewCount: Number(post.viewCount ?? post.views ?? post.hit ?? 0),
       likeCount: Number(post.likeCount ?? post.likes ?? 0),
-      commentCount: Number(post.commentCount ?? post.commentsCount ?? post.comments ?? 0),
+      commentCount: post.commentCount != null ? Number(post.commentCount) : post.commentsCount != null ? Number(post.commentsCount) : Array.isArray(post.comments) ? post.comments.length : null,
     }))
+    hydrateCommentCounts(posts.value, requestId)
   } catch (error) {
     if (!error.unavailable) console.warn(error.message)
   }
@@ -121,7 +137,7 @@ onBeforeUnmount(() => { clearTimeout(postSearchTimer); window.removeEventListene
     <div class="subpage-head"><span class="eyebrow">LOCAL STORIES</span><h1>서울 이야기 광장</h1><p>이름 대신 이야기로 만나는, 모두의 서울 커뮤니티</p></div>
     <div class="board-tools"><label ref="searchEl" :class="['search-box', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'search' }]">⌕<input v-model="query" placeholder="궁금한 이야기를 검색해보세요" /></label><router-link ref="writeEl" to="/write" :class="['primary-button', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'write' }]">＋ 글쓰기</router-link><button class="community-help" @click="startTutorial" aria-label="이야기 광장 이용 안내">?</button></div>
     <div ref="categoriesEl" :class="['category-tabs', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'categories' }]"><button v-for="category in categories" :key="category.label" :class="{ active: active === category.label, 'all-category': category.label === '전체' }" :style="{ '--category': category.color }" @click="active = category.label"><i></i>{{ category.label }}</button></div>
-    <div ref="listEl" :class="['board-list', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'list' }]"><router-link v-for="post in filtered" :key="post.id" :to="`/posts/${post.id}`" class="board-row"><span class="post-category" :style="{ '--tag': categoryColor(post.category) }">{{ post.category }}</span><div><h3>{{ post.title }}</h3><p>{{ post.content }}</p><small>익명의 서울러 · {{ post.time }}</small></div><div class="post-stats" aria-label="게시글 반응"><span title="조회수">◉ {{ post.viewCount ?? 0 }}</span><span title="댓글">▢ {{ post.commentCount ?? 0 }}</span><span title="좋아요">♡ {{ post.likeCount ?? 0 }}</span></div></router-link><div v-if="!filtered.length" class="empty-state">찾는 이야기가 아직 없어요.</div></div>
+    <div ref="listEl" :class="['board-list', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'list' }]"><router-link v-for="post in filtered" :key="post.id" :to="`/posts/${post.id}`" class="board-row"><span class="post-category" :style="{ '--tag': categoryColor(post.category) }">{{ post.category }}</span><div><h3>{{ post.title }}</h3><p>{{ post.content }}</p><small>익명의 서울러 · {{ post.time }}</small></div><div class="post-stats" aria-label="게시글 반응"><span title="조회수">👁 {{ post.viewCount ?? 0 }}</span><span title="댓글 수">💬 {{ post.commentCount ?? '…' }}</span><span title="좋아요">♡ {{ post.likeCount ?? 0 }}</span></div></router-link><div v-if="!filtered.length" class="empty-state">찾는 이야기가 아직 없어요.</div></div>
     <div v-if="tutorialActive" class="community-tutorial-backdrop" aria-hidden="true" @click="nextTutorialStep"></div>
     <aside v-if="tutorialActive" :class="['community-tutorial-guide', { 'chatbot-step': tutorialSteps[tutorialStep].target === 'chatbot' }]" role="dialog" aria-live="polite" aria-label="이야기 광장 튜토리얼"><button class="community-tutorial-close" @click="finishTutorial"><kbd>Esc</kbd><span>×</span></button><span class="eyebrow">{{ tutorialSteps[tutorialStep].eyebrow }}</span><h3>{{ tutorialSteps[tutorialStep].title }}</h3><p>{{ tutorialSteps[tutorialStep].text }}</p><div class="community-tutorial-dots"><i v-for="(_, index) in tutorialSteps" :key="index" :class="{ active:index === tutorialStep }"></i></div><div class="community-tutorial-actions"><button v-if="tutorialStep" class="secondary-button" @click="previousTutorialStep"><kbd>Backspace</kbd>이전</button><button class="primary-button" @click="nextTutorialStep"><kbd>Space</kbd>{{ tutorialStep === tutorialSteps.length - 1 ? '사이트 이용하기' : '다음' }} <span>→</span></button></div></aside>
   </div>
@@ -134,6 +150,6 @@ onBeforeUnmount(() => { clearTimeout(postSearchTimer); window.removeEventListene
 .community-help{border-color:color-mix(in srgb,var(--primary) 65%,var(--ink));background:color-mix(in srgb,var(--primary) 18%,var(--surface));color:var(--primary);box-shadow:4px 5px 0 color-mix(in srgb,var(--primary) 38%,var(--ink))}.community-help:hover{background:color-mix(in srgb,var(--primary) 25%,var(--surface));box-shadow:6px 7px 0 color-mix(in srgb,var(--primary) 42%,var(--ink))}
 .community-help,.community-help:hover{box-shadow:none}
 .community-tutorial-backdrop{pointer-events:auto;cursor:pointer}
-.post-stats{display:flex;align-items:center;gap:13px;color:var(--muted);font:800 12px Nunito;white-space:nowrap}.post-stats span:last-child{color:var(--primary)}
+.post-stats{display:flex;align-items:center;justify-content:flex-end;align-self:center;gap:13px;min-width:150px;margin-left:auto;color:var(--muted);font:800 12px Nunito;white-space:nowrap}.post-stats span:last-child{color:var(--primary)}
 @media(max-width:560px){.post-stats{justify-content:flex-end;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}.board-row small{border-top:0!important;padding-top:0!important}}
 </style>

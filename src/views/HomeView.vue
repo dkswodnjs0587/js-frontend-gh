@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { getPosts, getTour, getTours } from '../services/api'
+import { getComments, getPosts, getTour, getTours } from '../services/api'
 import { formatPostTime } from '../utils/date'
 
 const categories = [
@@ -77,7 +77,7 @@ const categoryById = { 12: '관광지', 14: '문화시설', 15: '축제·공연'
 async function loadRecentPosts() {
   try {
     const data = await getPosts({ page: 1, size: 100 })
-    posts.value = (data?.items || [])
+    const recentPosts = (data?.items || [])
       .sort((a, b) => new Date(b.createdtime) - new Date(a.createdtime))
       .slice(0, 3)
       .map(post => {
@@ -87,8 +87,18 @@ async function loadRecentPosts() {
           category,
           color: categories.find(item => item.label === category)?.color || '#6973c7',
           time: formatPostTime(post.createdtime),
+          viewCount: Number(post.viewCount ?? post.views ?? post.hit ?? 0),
+          likeCount: Number(post.likeCount ?? post.likes ?? 0),
+          commentCount: post.commentCount != null ? Number(post.commentCount) : post.commentsCount != null ? Number(post.commentsCount) : Array.isArray(post.comments) ? post.comments.length : null,
         }
       })
+    posts.value = recentPosts
+    recentPosts.filter(post => post.commentCount === null).forEach(async post => {
+      try {
+        const comments = await getComments(post.id)
+        post.commentCount = Number(comments?.total ?? comments?.items?.length ?? 0)
+      } catch { post.commentCount = 0 }
+    })
   } catch (error) {
     if (!error.unavailable) console.warn(error.message)
   }
@@ -610,7 +620,7 @@ onBeforeUnmount(() => {
 
   <section ref="communitySectionEl" :class="['community-preview page-section', { 'tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'community' }]">
     <div class="section-heading"><div><span class="eyebrow">LOCAL STORIES</span><h2>지금, 서울 사람들의 이야기</h2><p>익명으로 편하게 묻고, 나만의 서울을 나눠보세요.</p></div><router-link to="/community" class="text-link">이야기 전체 보기 →</router-link></div>
-    <div class="post-grid"><router-link v-for="post in posts" :key="post.id" :to="`/posts/${post.id}`" class="post-card"><span class="post-category" :style="{ '--tag': post.color }">{{ post.category }}</span><h3>{{ post.title }}</h3><p>{{ post.content }}</p><div class="post-meta"><span>익명의 서울러 · {{ post.time }}</span></div></router-link></div>
+    <div class="post-grid"><router-link v-for="post in posts" :key="post.id" :to="`/posts/${post.id}`" class="post-card"><span class="post-category" :style="{ '--tag': post.color }">{{ post.category }}</span><h3>{{ post.title }}</h3><p>{{ post.content }}</p><div class="post-meta"><span>익명의 서울러 · {{ post.time }}</span><span class="home-post-stats"><i title="조회수">👁 {{ post.viewCount ?? 0 }}</i><i title="댓글 수">💬 {{ post.commentCount ?? '…' }}</i><i title="좋아요">♡ {{ post.likeCount ?? 0 }}</i></span></div></router-link></div>
     <div ref="communityCtaEl" :class="['community-cta', { 'tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'write' }]"><div class="cta-icon">✎</div><div><strong>당신이 발견한 서울은 어떤 모습인가요?</strong><p>지금 이 순간의 동네 이야기를 들려주세요.</p></div><router-link to="/write" class="primary-button">이야기 남기기</router-link></div>
   </section>
 
@@ -626,6 +636,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.home-post-stats{display:flex;justify-content:flex-end;gap:9px;margin-left:auto;white-space:nowrap}.home-post-stats i{font:800 11px Nunito;font-style:normal}.home-post-stats i:last-child{color:var(--primary)}
 .seoul-social-art{height:500px;isolation:isolate}.seoul-social-art:before{content:'';position:absolute;width:390px;height:390px;border-radius:50%;background:var(--yellow);left:52%;top:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 24px color-mix(in srgb,var(--yellow) 18%,transparent);z-index:-1}.social-card{position:absolute;overflow:hidden;padding:7px 7px 0;border:3px solid var(--ink);border-radius:10px;background:var(--surface);box-shadow:7px 8px 0 var(--ink);transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s ease}.social-card:hover{z-index:5;transform:translateY(-9px) rotate(0deg) scale(1.035);box-shadow:10px 13px 0 var(--ink)}.social-photo{width:100%;height:calc(100% - 34px);border-radius:5px;background-image:url('/seoul-hero-day.png');background-size:200% 200%;background-repeat:no-repeat;transition:background-image .35s ease,filter .35s ease}:global(:root[data-theme=dark]) .social-photo{background-image:url('/seoul-hero-night.png')}.photo-tower{background-position:0 0}.photo-gate{background-position:100% 0}.photo-food{background-position:0 100%}.photo-hanbok{background-position:100% 100%}.social-actions{height:34px;display:flex;align-items:center;gap:7px;padding:0 3px;font-size:12px}.social-actions button{width:24px;padding:0;border:0;background:transparent;color:var(--muted);font-size:21px;line-height:1;transition:transform .2s ease,color .2s ease}.social-actions button:hover{transform:scale(1.2)}.social-actions button.liked{color:#f05f64;animation:hero-heart .35s ease}.social-actions .comment-button{display:grid;place-items:center;height:24px;cursor:default}.comment-button i{position:relative;display:block;width:17px;height:13px;border:2px solid currentColor;border-radius:7px}.comment-button i:after{content:'';position:absolute;left:2px;bottom:-5px;width:5px;height:5px;border-left:2px solid currentColor;transform:skewY(-35deg)}.comment-button:hover i{animation:comment-wiggle .4s ease}.social-actions b{margin-left:auto;font-size:11px}.social-tower{width:205px;height:230px;left:5%;top:13%;transform:rotate(-5deg)}.social-gate{width:225px;height:180px;right:1%;top:3%;transform:rotate(4deg)}.social-food{width:185px;height:170px;left:18%;bottom:1%;transform:rotate(3deg)}.social-hanbok{width:190px;height:220px;right:6%;bottom:0;transform:rotate(-4deg)}.hero-bubble{position:absolute;z-index:7;display:grid;place-items:center;width:58px;height:58px;border:3px solid var(--ink);border-radius:50% 50% 50% 12px;background:var(--purple);color:#fff;box-shadow:5px 6px 0 var(--ink);font-size:26px;animation:hero-float 3.2s ease-in-out infinite}.bubble-camera{left:43%;top:0}.bubble-food{right:0;top:42%;width:52px;height:52px;background:var(--green);font-size:22px;animation-delay:-1s}.bubble-route{left:2%;bottom:13%;width:45px;height:45px;background:var(--yellow);color:#765c18;font-size:19px;animation-delay:-2s}@keyframes hero-heart{50%{transform:scale(1.45) rotate(-8deg)}}@keyframes comment-wiggle{25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}@keyframes hero-float{50%{transform:translateY(-8px) rotate(4deg)}}
 @media(max-width:850px){.seoul-social-art{max-width:570px;width:100%;margin:25px auto 0}.social-tower{left:8%}.social-gate{right:4%}.social-food{left:22%}.social-hanbok{right:9%}}
 @media(max-width:560px){.seoul-social-art{height:390px;transform:scale(.88);transform-origin:top center;margin-bottom:-40px}.seoul-social-art:before{width:310px;height:310px}.social-tower{width:160px;height:190px;left:3%}.social-gate{width:175px;height:145px;right:0}.social-food{width:150px;height:140px;left:16%}.social-hanbok{width:155px;height:180px;right:3%}.hero-bubble{transform:scale(.82)}}
