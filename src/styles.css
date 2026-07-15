@@ -168,3 +168,6 @@ footer{background:#242842;color:#f7f5ff}.footer-brand p,.copyright{color:#b9bdd3
 .map-info-group .map-info-place:hover{background:#f2f0ea}
 .map-info-group .map-info-place.selected{background:color-mix(in srgb,var(--place-color) 11%,#fff)}
 @media(max-width:560px){.map-info-list-pane{border:0}}
+
+/* 데스크톱 튜토리얼 마지막 단계: 설명 상자에서 우측 하단 챗봇으로 안내 */
+@media(min-width:851px){.tutorial-guide.chatbot-step:after,.community-tutorial-guide.chatbot-step:after{content:'';position:absolute;left:calc(100% + 12px);bottom:31px;width:max(46px,calc(50vw - 350px));height:3px;border-radius:99px;background:var(--primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 12%,transparent);pointer-events:none}.tutorial-guide.chatbot-step:before,.community-tutorial-guide.chatbot-step:before{content:'';position:absolute;left:calc(100% + max(58px,calc(50vw - 338px)));bottom:24px;border-top:8px solid transparent;border-bottom:8px solid transparent;border-left:12px solid var(--primary);filter:drop-shadow(0 2px 2px color-mix(in srgb,var(--primary) 28%,transparent));pointer-events:none}}

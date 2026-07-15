@@ -16,9 +16,9 @@ const writeEl = ref(null)
 const tutorialSteps = [
   { target: 'search', eyebrow: 'STEP 1 · 이야기 검색', title: '궁금한 이야기를 찾아보세요', text: '제목과 본문을 기준으로 이야기 광장의 게시물을 빠르게 검색할 수 있어요.' },
   { target: 'categories', eyebrow: 'STEP 2 · 카테고리', title: '관심 주제만 골라보세요', text: '관광지, 문화시설, 축제, 여행코스 등 원하는 카테고리를 선택하면 관련 이야기만 볼 수 있어요.' },
-  { target: 'list', eyebrow: 'STEP 3 · 최신 이야기', title: '최근 작성된 이야기부터 확인하세요', text: '게시물은 최신순으로 정리되어 있어요. 제목을 누르면 전체 내용과 작성 시간을 확인할 수 있어요.' },
-  { target: 'write', eyebrow: 'STEP 4 · 글쓰기', title: '익명으로 이야기를 남겨보세요', text: '글쓰기 버튼을 눌러 질문, 추천, 여행 후기 등 나만의 서울 이야기를 자유롭게 작성할 수 있어요.' },
-  { target: 'chatbot', eyebrow: 'STEP 5 · AI 챗봇', title: '여행 질문은 쓰프에게 물어보세요', text: '장소 추천이나 여행 일정이 궁금하면 우측 하단 AI 챗봇을 활용하세요. 서울에 관한 질문을 편하게 할 수 있어요.' },
+  { target: 'list', eyebrow: 'STEP 3 · 최신 이야기', title: '게시글의 핵심 내용을 먼저 살펴보세요', text: '글 목록에서 제목과 간단한 내용, 작성자와 작성일을 확인할 수 있어요. 게시물은 최신순으로 정리되며, 다음 단계에서는 예시 글을 직접 열어 좋아요와 댓글 기능을 살펴봅니다.' },
+  { target: 'write', eyebrow: 'STEP 5 · 글쓰기', title: '익명으로 이야기를 남겨보세요', text: '글쓰기 버튼을 눌러 질문, 추천, 여행 후기 등 나만의 서울 이야기를 자유롭게 작성할 수 있어요.' },
+  { target: 'chatbot', eyebrow: 'STEP 6 · AI 챗봇', title: '여행 질문은 쓰프에게 물어보세요', text: '장소 추천이나 여행 일정이 궁금하면 우측 하단 AI 챗봇을 활용하세요. 서울에 관한 질문을 편하게 할 수 있어요.' },
 ]
 const categories = [
   { label: '전체', color: '#6973c7' },
@@ -48,7 +48,7 @@ function tutorialTarget() {
   const target = tutorialSteps[tutorialStep.value].target
   if (target === 'search') return searchEl.value
   if (target === 'categories') return categoriesEl.value
-  if (target === 'list') return listEl.value
+  if (target === 'list') return listEl.value?.querySelector('.board-row-content') || listEl.value
   if (target === 'write') return writeEl.value?.$el || writeEl.value
   return document.querySelector('.chat-fab')
 }
@@ -61,13 +61,24 @@ async function showTutorialStep(step) {
   if (!target) return
   if (tutorialSteps[step].target === 'chatbot') target.classList.add('tutorial-external-focus')
   const rect = target.getBoundingClientRect()
-  window.scrollTo({ top: window.scrollY + rect.top - Math.max(80, (window.innerHeight - rect.height) / 2), behavior: 'smooth' })
+  const offset = tutorialSteps[step].target === 'list' ? 180 : Math.max(80, (window.innerHeight - rect.height) / 2)
+  window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: 'smooth' })
 }
 
 function startTutorial() { tutorialActive.value = true; showTutorialStep(0) }
 function finishTutorial() { tutorialActive.value = false; document.querySelector('.tutorial-external-focus')?.classList.remove('tutorial-external-focus') }
 function nextTutorialStep() {
-  if (tutorialStep.value === 3) {
+  const currentStep = tutorialSteps[tutorialStep.value]
+  const writeStepIndex = tutorialSteps.findIndex(step => step.target === 'write')
+  if (currentStep.target === 'list' && tutorialStep.value === writeStepIndex - 1) {
+    const examplePost = filtered.value[0]
+    if (examplePost) {
+      finishTutorial()
+      router.push(`/posts/${examplePost.id}?tutorial=interaction`)
+      return
+    }
+  }
+  if (currentStep.target === 'write') {
     finishTutorial()
     router.push('/write?tutorial=1')
     return
@@ -127,9 +138,26 @@ watch([query, active], () => {
   clearTimeout(postSearchTimer)
   postSearchTimer = setTimeout(loadPosts, 220)
 })
-onMounted(loadPosts)
 onMounted(() => { window.addEventListener('keydown', handleTutorialKeydown); window.addEventListener('localhub:start-community-tutorial', startTutorial) })
-onMounted(() => { if (route.query.tutorial === 'chatbot') { tutorialActive.value = true; showTutorialStep(4); router.replace('/community') } })
+onMounted(async () => {
+  loadPosts()
+  if (route.query.tutorial === 'chatbot') {
+    tutorialActive.value = true
+    showTutorialStep(tutorialSteps.findIndex(step => step.target === 'chatbot'))
+    router.replace('/community')
+  } else if (route.query.tutorial === 'write') {
+    tutorialActive.value = true
+    showTutorialStep(tutorialSteps.findIndex(step => step.target === 'write'))
+    router.replace('/community')
+  } else if (route.query.tutorial === 'interaction') {
+    const writeStepIndex = tutorialSteps.findIndex(step => step.target === 'write')
+    tutorialStep.value = writeStepIndex - 1
+    tutorialActive.value = true
+    await router.replace('/community')
+    await nextTick()
+    await showTutorialStep(writeStepIndex - 1)
+  }
+})
 onBeforeUnmount(() => { clearTimeout(postSearchTimer); window.removeEventListener('keydown', handleTutorialKeydown); window.removeEventListener('localhub:start-community-tutorial', startTutorial); finishTutorial() })
 </script>
 <template>
@@ -137,7 +165,7 @@ onBeforeUnmount(() => { clearTimeout(postSearchTimer); window.removeEventListene
     <div class="subpage-head"><span class="eyebrow">LOCAL STORIES</span><h1>서울 이야기 광장</h1><p>이름 대신 이야기로 만나는, 모두의 서울 커뮤니티</p></div>
     <div class="board-tools"><label ref="searchEl" :class="['search-box', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'search' }]">⌕<input v-model="query" placeholder="궁금한 이야기를 검색해보세요" /></label><router-link ref="writeEl" to="/write" :class="['primary-button', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'write' }]">＋ 글쓰기</router-link><button class="community-help" @click="startTutorial" aria-label="이야기 광장 이용 안내">?</button></div>
     <div ref="categoriesEl" :class="['category-tabs', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'categories' }]"><button v-for="category in categories" :key="category.label" :class="{ active: active === category.label, 'all-category': category.label === '전체' }" :style="{ '--category': category.color }" @click="active = category.label"><i></i>{{ category.label }}</button></div>
-    <div ref="listEl" :class="['board-list', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'list' }]"><router-link v-for="post in filtered" :key="post.id" :to="`/posts/${post.id}`" class="board-row"><span class="post-category" :style="{ '--tag': categoryColor(post.category) }">{{ post.category }}</span><div class="board-row-content"><h3>{{ post.title }}</h3><p>{{ post.content }}</p><div class="board-row-footer"><small>익명의 서울러 · {{ post.time }}</small><div class="post-stats" aria-label="게시글 반응"><span title="조회수">👁 {{ post.viewCount ?? 0 }}</span><span title="댓글 수">💬 {{ post.commentCount ?? post.comments ?? 0 }}</span><span title="좋아요">♡ {{ post.likeCount ?? 0 }}</span></div></div></div></router-link><div v-if="!filtered.length" class="empty-state">찾는 이야기가 아직 없어요.</div></div>
+    <div ref="listEl" class="board-list"><router-link v-for="(post, index) in filtered" :key="post.id" :to="`/posts/${post.id}`" class="board-row"><span :class="['post-category', { 'tutorial-category-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'list' && index === 0 }]" :style="{ '--tag': categoryColor(post.category) }">{{ post.category }}</span><div :class="['board-row-content', { 'community-tutorial-focus tutorial-post-content': tutorialActive && tutorialSteps[tutorialStep].target === 'list' && index === 0 }]"><h3>{{ post.title }}</h3><p>{{ post.content }}</p><div class="board-row-footer"><small>익명의 서울러 · {{ post.time }}</small><div class="post-stats" aria-label="게시글 반응"><span title="조회수">👁 {{ post.viewCount ?? 0 }}</span><span title="댓글 수">💬 {{ post.commentCount ?? post.comments ?? 0 }}</span><span title="좋아요">♡ {{ post.likeCount ?? 0 }}</span></div></div></div></router-link><div v-if="!filtered.length" class="empty-state">찾는 이야기가 아직 없어요.</div></div>
     <div v-if="tutorialActive" class="community-tutorial-backdrop" aria-hidden="true" @click="nextTutorialStep"></div>
     <aside v-if="tutorialActive" :class="['community-tutorial-guide', { 'chatbot-step': tutorialSteps[tutorialStep].target === 'chatbot' }]" role="dialog" aria-live="polite" aria-label="이야기 광장 튜토리얼"><button class="community-tutorial-close" @click="finishTutorial"><kbd>Esc</kbd><span>×</span></button><span class="eyebrow">{{ tutorialSteps[tutorialStep].eyebrow }}</span><h3>{{ tutorialSteps[tutorialStep].title }}</h3><p>{{ tutorialSteps[tutorialStep].text }}</p><div class="community-tutorial-dots"><i v-for="(_, index) in tutorialSteps" :key="index" :class="{ active:index === tutorialStep }"></i></div><div class="community-tutorial-actions"><button v-if="tutorialStep" class="secondary-button" @click="previousTutorialStep"><kbd>Backspace</kbd>이전</button><button class="primary-button" @click="nextTutorialStep"><kbd>Space</kbd>{{ tutorialStep === tutorialSteps.length - 1 ? '사이트 이용하기' : '다음' }} <span>→</span></button></div></aside>
   </div>
@@ -150,6 +178,7 @@ onBeforeUnmount(() => { clearTimeout(postSearchTimer); window.removeEventListene
 .community-help{border-color:color-mix(in srgb,var(--primary) 65%,var(--ink));background:color-mix(in srgb,var(--primary) 18%,var(--surface));color:var(--primary);box-shadow:4px 5px 0 color-mix(in srgb,var(--primary) 38%,var(--ink))}.community-help:hover{background:color-mix(in srgb,var(--primary) 25%,var(--surface));box-shadow:6px 7px 0 color-mix(in srgb,var(--primary) 42%,var(--ink))}
 .community-help,.community-help:hover{box-shadow:none}
 .community-tutorial-backdrop{pointer-events:auto;cursor:pointer}
+.tutorial-post-content{background:#fff;color:#26352f;padding:12px;margin:-12px;border-radius:14px}.tutorial-post-content p,.tutorial-post-content small,.tutorial-post-content .post-stats{color:#69736e}.tutorial-category-focus{position:relative;z-index:70;background:#fff!important;color:var(--tag)!important;outline:3px solid color-mix(in srgb,var(--tag) 72%,white);outline-offset:3px;border:1px solid var(--tag)!important}
 .board-row-content{min-width:0}.board-row-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;width:100%}.post-stats{display:flex;align-items:center;justify-content:flex-end;gap:13px;margin-left:auto;color:var(--muted);font:800 12px Nunito;line-height:1.3;white-space:nowrap}.post-stats span:last-child{color:var(--primary)}
 @media(max-width:560px){.post-stats{justify-content:flex-end;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}.board-row small{border-top:0!important;padding-top:0!important}}
 @media(max-width:560px){.board-row{display:grid;grid-template-columns:1fr;align-items:end}.board-row>.post-category{grid-column:1}.board-row>.board-row-content{grid-column:1;width:100%}.board-row-footer{align-items:flex-end}.board-row-footer .post-stats{min-width:0;margin:0 0 0 auto;padding:0;border:0}}
