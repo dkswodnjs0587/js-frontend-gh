@@ -105,6 +105,10 @@ async function openTutorial() {
     window.dispatchEvent(new Event('localhub:start-community-tutorial'))
     return
   }
+  if (router.currentRoute.value.path === '/festivals') {
+    window.dispatchEvent(new Event('localhub:start-festival-tutorial'))
+    return
+  }
   await router.push('/')
   setTimeout(() => window.dispatchEvent(new Event('localhub:start-tutorial')), 0)
 }
@@ -193,7 +197,7 @@ function toggleChat() {
           <span class="chat-message-text">{{ message.text }}</span>
           <div v-if="message.actions === 'tutorial-entry'" class="chat-quick-actions"><button @click="askTutorial(message)">사이트 튜토리얼</button><button @click="showRecommendedQuestions">자주 묻는 질문</button></div>
           <div v-else-if="message.actions === 'recommended-questions'" class="chat-recommended-questions"><button v-for="question in recommendedQuestions" :key="question" @click="askRecommendedQuestion(question)">{{ question }}</button><button class="chat-recommend-dismiss" @click="dismissRecommendedQuestions">괜찮아</button></div>
-          <div v-else-if="message.actions === 'tutorial-choice'" class="chat-tutorial-choices"><button @click="chooseTutorial('/', 'localhub:start-tutorial', '메인 페이지')">⌖ 메인 페이지</button><button @click="chooseTutorial('/community', 'localhub:start-community-tutorial', '이야기 광장')">▦ 이야기 광장</button><button class="chat-choice-close" @click="dismissTutorialChoice(message)" aria-label="튜토리얼 선택 닫기">×</button></div>
+          <div v-else-if="message.actions === 'tutorial-choice'" class="chat-tutorial-choices"><button @click="chooseTutorial('/', 'localhub:start-tutorial', '메인 페이지')">⌖ 메인 페이지</button><button @click="chooseTutorial('/community', 'localhub:start-community-tutorial', '이야기 광장')">▦ 이야기 광장</button><button @click="chooseTutorial('/festivals', 'localhub:start-festival-tutorial', '축제 캘린더')">▤ 축제 캘린더</button><button class="chat-choice-close" @click="dismissTutorialChoice(message)" aria-label="튜토리얼 선택 닫기">×</button></div>
           <div v-else-if="message.actions === 'chat-start'" class="chat-quick-actions chat-start-action"><button @click="startFreshChat">대화 시작하기 <span>→</span></button></div>
         </div>
         <div v-if="isBotTyping && !isBotRevealing" class="bubble bot typing-bubble" aria-label="쓰프가 답변을 작성 중입니다"><i></i><i></i><i></i></div>
