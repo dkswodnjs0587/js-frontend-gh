@@ -416,18 +416,19 @@ function drawMarkers() {
 async function init() {
   loadDistrictShapes().catch(() => {})
   loadRecentPosts()
+  const kakaoPromise = loadKakao()
   try {
     const loaded = await Promise.all(categories.map(async category => {
-      const items = []
       const size = 100
-      let page = 1
-      let totalPages = 1
-      do {
-        const data = await getTours({ contentTypeId: category.id, page, size })
-        items.push(...(data?.items || []))
-        totalPages = Number(data?.totalPages || 1)
-        page += 1
-      } while (page <= totalPages)
+      const firstPage = await getTours({ contentTypeId: category.id, page: 1, size })
+      const items = [...(firstPage?.items || [])]
+      const totalPages = Number(firstPage?.totalPages || 1)
+      const batchSize = 5
+      for (let start = 2; start <= totalPages; start += batchSize) {
+        const pages = Array.from({ length: Math.min(batchSize, totalPages - start + 1) }, (_, index) => start + index)
+        const results = await Promise.all(pages.map(page => getTours({ contentTypeId: category.id, page, size })))
+        results.forEach(data => items.push(...(data?.items || [])))
+      }
       return items
     }))
     places.value = loaded.flat().map(item => normalizePlace(item)).filter(place => categories.some(category => category.id === place.type) && Number.isFinite(place.lat) && Number.isFinite(place.lng))
@@ -444,7 +445,7 @@ async function init() {
   loading.value = false
   await nextTick()
   try {
-    await loadKakao()
+    await kakaoPromise
     map = new window.kakao.maps.Map(mapEl.value, { center: new window.kakao.maps.LatLng(37.5665, 126.978), level: 8 })
     window.kakao.maps.event.addListener(map, 'click', () => { activeInfo?.close(); activeInfo = null })
     drawMarkers()

@@ -96,6 +96,12 @@ function startFreshChat() {
   isBotTyping.value = false
 }
 
+function clearChatHistory() {
+  messages.value = initialMessages()
+  chatText.value = ''
+  isBotTyping.value = false
+}
+
 function toggleChat() {
   if (!chatOpen.value) {
     const lastMessage = messages.value.at(-1)
@@ -137,7 +143,7 @@ function toggleChat() {
       <span v-else class="ai-bot-icon"><i class="bot-antenna"></i><i class="bot-eye left"></i><i class="bot-eye right"></i><i class="bot-smile"></i><b>AI</b></span>
     </button>
     <section v-if="chatOpen" class="chat-panel" aria-label="쓰프 챗봇">
-      <div class="chat-head"><div class="bot-face"><span class="mini-bot">AI</span></div><div><strong>쓰프</strong><small>AI 서울 로컬 가이드 · 온라인</small></div><button @click="chatOpen=false">×</button></div>
+      <div class="chat-head"><div class="bot-face"><span class="mini-bot">AI</span></div><div><strong>쓰프</strong><small>AI 서울 로컬 가이드 · 온라인</small></div><button class="chat-clear" @click="clearChatHistory">대화 내용 삭제</button><button class="chat-head-close" @click="chatOpen=false" aria-label="챗봇 닫기">×</button></div>
       <div ref="chatBody" class="chat-body" aria-live="polite">
         <div v-for="(message, index) in messages" :key="index" :class="['bubble', message.from, { 'has-actions': message.actions }]">{{ message.text }}<div v-if="message.actions === 'tutorial-entry'" class="chat-quick-actions"><button @click="askTutorial(message)">사이트 튜토리얼</button></div><div v-else-if="message.actions === 'tutorial-choice'" class="chat-tutorial-choices"><button @click="chooseTutorial('/', 'localhub:start-tutorial', '메인 페이지')">⌖ 메인 페이지</button><button @click="chooseTutorial('/community', 'localhub:start-community-tutorial', '이야기 광장')">▦ 이야기 광장</button><button class="chat-choice-close" @click="dismissTutorialChoice(message)" aria-label="튜토리얼 선택 닫기">×</button></div><div v-else-if="message.actions === 'chat-start'" class="chat-quick-actions chat-start-action"><button @click="startFreshChat">대화 시작하기 <span>→</span></button></div></div>
         <div v-if="isBotTyping" class="bubble bot typing-bubble" aria-label="쓰프가 답변을 작성 중입니다"><i></i><i></i><i></i></div>
