@@ -51,6 +51,7 @@ let ssafyMarker
 let ssafyInfo
 const markerImages = new Map()
 const markerCache = new Map()
+const markerEntryByMarker = new WeakMap()
 const tourDetailCache = new Map()
 
 const filteredPlaces = computed(() => {
@@ -268,13 +269,30 @@ async function loadTourDetail(place) {
   }
 }
 
-function infoWindowContent(group) {
-  const place = group[0]
-  const thumbnailPlace = group.find(item => item.thumbnail) || place
+function infoWindowContent(group, selectedIndex = 0) {
+  const place = group[selectedIndex] || group[0]
+  const thumbnailPlace = place.thumbnail ? place : (group.find(item => item.thumbnail) || place)
   const thumbnail = thumbnailPlace.thumbnail ? `<img src="${escapeHtml(thumbnailPlace.thumbnail)}" alt="" onerror="this.parentElement.classList.add('image-missing');this.remove()">` : '<div class="map-info-placeholder">사진 준비 중</div>'
-  const placeList = group.map(item => `<div class="map-info-place"><span style="--place-color:${item.color}">${escapeHtml(item.category)}</span><b>${escapeHtml(item.title)}</b>${item.tel ? `<small>${escapeHtml(item.tel)}</small>` : ''}</div>`).join('')
+  const placeList = group.map((item, index) => `<button type="button" class="map-info-place${index === selectedIndex ? ' selected' : ''}" data-place-index="${index}"><span style="--place-color:${item.color}">${escapeHtml(item.category)}</span><b>${escapeHtml(item.title)}</b>${item.tel ? `<small>${escapeHtml(item.tel)}</small>` : ''}</button>`).join('')
   const countLabel = group.length > 1 ? `<small>같은 주소의 장소 ${group.length}곳</small>` : ''
-  return `<div class="map-info map-info-group">${thumbnail}<div class="map-info-body">${countLabel}<div class="map-info-list">${placeList}</div><p>${escapeHtml(place.address || '주소 정보 없음')}</p></div></div>`
+  const selectedDetail = `<div class="map-info-detail">${thumbnail}<div class="map-info-detail-body"><span style="--place-color:${place.color}">${escapeHtml(place.category)}</span><b>${escapeHtml(place.title)}</b><p>${escapeHtml(place.address || '주소 정보 없음')}</p>${place.tel ? `<small>${escapeHtml(place.tel)}</small>` : ''}</div></div>`
+  return `<div class="map-info map-info-group"><div class="map-info-list-pane">${countLabel}<div class="map-info-list">${placeList}</div></div>${selectedDetail}</div>`
+}
+
+function showSelectableInfo(info, details, selectedIndex = 0, preservedScrollTop = null) {
+  const currentList = document.querySelector('.map-info-list')
+  const scrollTop = preservedScrollTop ?? currentList?.scrollTop ?? 0
+  info.setContent(infoWindowContent(details, selectedIndex))
+  window.setTimeout(() => {
+    const list = document.querySelector('.map-info-list')
+    if (list) list.scrollTop = scrollTop
+    list?.querySelectorAll('.map-info-place[data-place-index]').forEach(button => {
+      button.addEventListener('click', () => {
+        if (activeInfo !== info) return
+        showSelectableInfo(info, details, Number(button.dataset.placeIndex), list.scrollTop)
+      })
+    })
+  })
 }
 
 async function openMarkerInfo(entry) {
@@ -286,7 +304,7 @@ async function openMarkerInfo(entry) {
   activeInfo = info
   info.open(map, entry.marker)
   const details = await Promise.all(entry.group.map(loadTourDetail))
-  if (activeInfo === info) info.setContent(infoWindowContent(details))
+  if (activeInfo === info) showSelectableInfo(info, details)
 }
 
 function markerImage(color) {
@@ -405,14 +423,31 @@ function drawMarkers() {
       entry.marker.setTitle(title)
       entry.marker.setImage(markerImage(place.color))
     }
+    markerEntryByMarker.set(entry.marker, entry)
     const extraCount = group.length - 1
     while (entry.countMarkers.length < extraCount) {
       entry.countMarkers.push(new window.kakao.maps.Marker({ position, image: transparentMarkerImage(), clickable: false, zIndex: -1 }))
     }
-    entry.countMarkers.forEach(marker => marker.setPosition(position))
+    entry.countMarkers.forEach(marker => {
+      marker.setPosition(position)
+      markerEntryByMarker.set(marker, entry)
+    })
     return [entry.marker, ...entry.countMarkers.slice(0, extraCount)]
   })
-  if (!clusterer) clusterer = new window.kakao.maps.MarkerClusterer({ map, averageCenter: false, minLevel: 1, minClusterSize: 2, gridSize: 180, disableClickZoom: false, calculator: [10, 50, 100], styles: clusterStyles() })
+  if (!clusterer) {
+    clusterer = new window.kakao.maps.MarkerClusterer({ map, averageCenter: false, minLevel: 1, minClusterSize: 2, gridSize: 180, disableClickZoom: true, calculator: [10, 50, 100], styles: clusterStyles() })
+    window.kakao.maps.event.addListener(clusterer, 'clusterclick', cluster => {
+      const entries = new Set(cluster.getMarkers().map(marker => markerEntryByMarker.get(marker)).filter(Boolean))
+      if (entries.size === 1) {
+        const [entry] = entries
+        if (entry.group.length > 1) {
+          openMarkerInfo(entry)
+          return
+        }
+      }
+      map.setLevel(Math.max(1, map.getLevel() - 1), { anchor: cluster.getCenter(), animate: true })
+    })
+  }
   else clusterer.setStyles(clusterStyles())
   clusterer.addMarkers(markers, true)
   clusterer.redraw()
