@@ -52,6 +52,18 @@ async function revealBotMessage(text, actions = null) {
   messages.value.push({ from: 'bot', text: String(text || ''), actions })
 }
 
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+
+async function revealToken(message, token) {
+  const characters = [...String(token || '')]
+  const batchSize = characters.length > 100 ? 2 : 1
+
+  for (let index = 0; index < characters.length; index += batchSize) {
+    message.text += characters.slice(index, index + batchSize).join('')
+    await delay(20)
+  }
+}
+
 async function requestBotAnswer(text) {
   isBotTyping.value = true
   const streamMessage = { from: 'bot', text: '' }
@@ -60,7 +72,7 @@ async function requestBotAnswer(text) {
     await sendChatStream(text, {}, {
       async onToken(token) {
         isBotRevealing.value = true
-        streamMessage.text += token
+        await revealToken(streamMessage, token)
       },
     })
   } catch (error) {
