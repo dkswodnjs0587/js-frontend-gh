@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onMounted, ref, watch } from 'vue'
+import { nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { sendChatStream } from './services/api'
 
@@ -66,7 +66,7 @@ async function revealToken(message, token) {
 
 async function requestBotAnswer(text) {
   isBotTyping.value = true
-  const streamMessage = { from: 'bot', text: '' }
+  const streamMessage = reactive({ from: 'bot', text: '' })
   try {
     messages.value.push(streamMessage)
     await sendChatStream(text, {}, {
