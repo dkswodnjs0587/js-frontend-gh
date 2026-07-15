@@ -1,7 +1,7 @@
 <script setup>
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { sendChat } from './services/api'
+import { sendChatStream } from './services/api'
 
 const router = useRouter()
 const isDark = ref(false)
@@ -53,21 +53,37 @@ async function revealBotMessage(text, actions = null) {
   const message = { from: 'bot', text: '', actions }
   messages.value.push(message)
   const answer = String(text || '')
-  const chunkSize = answer.length > 500 ? 8 : answer.length > 220 ? 5 : 3
-  for (let index = chunkSize; index < answer.length; index += chunkSize) {
-    message.text = answer.slice(0, index)
-    await new Promise(resolve => setTimeout(resolve, 18))
+  const characters = typeof Intl.Segmenter === 'function'
+    ? [...new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(answer)].map(segment => segment.segment)
+    : Array.from(answer)
+  for (const character of characters) {
+    message.text += character
+    const pause = character === '\n' ? 65 : /[.!?。！？]/.test(character) ? 45 : /[,，]/.test(character) ? 28 : 14
+    await new Promise(resolve => setTimeout(resolve, pause))
   }
-  message.text = answer
   isBotRevealing.value = false
 }
 
 async function requestBotAnswer(text) {
   isBotTyping.value = true
+  const streamMessage = { from: 'bot', text: '' }
   try {
-    const data = await sendChat(text, {})
-    await revealBotMessage(data.answer)
+    messages.value.push(streamMessage)
+    await sendChatStream(text, {}, {
+      async onToken(token) {
+        isBotRevealing.value = true
+        const characters = typeof Intl.Segmenter === 'function'
+          ? [...new Intl.Segmenter('ko', { granularity: 'grapheme' }).segment(token)].map(segment => segment.segment)
+          : Array.from(token)
+        for (const character of characters) {
+          streamMessage.text += character
+          const pause = character === '\n' ? 65 : /[.!?。！？]/.test(character) ? 45 : /[,，]/.test(character) ? 28 : 14
+          await new Promise(resolve => setTimeout(resolve, pause))
+        }
+      },
+    })
   } catch (error) {
+    if (!streamMessage.text) messages.value = messages.value.filter(message => message !== streamMessage)
     await revealBotMessage(error.unavailable ? '지금은 쓰프와 연결이 어렵습니다. 잠시 후 다시 물어봐 주세요.' : error.message, 'tutorial-entry')
   } finally {
     isBotRevealing.value = false

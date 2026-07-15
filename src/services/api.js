@@ -49,6 +49,44 @@ export const createPost = body => request('/posts', { method: 'POST', body })
 export const updatePost = (postId, body) => request(`/posts/${encodeURIComponent(postId)}`, { method: 'PUT', body })
 export const deletePost = (postId, password) => request(`/posts/${encodeURIComponent(postId)}`, { method: 'DELETE', body: { password } })
 export const sendChat = (message, context = {}) => request('/chat', { method: 'POST', body: { message, context } })
+export async function sendChatStream(message, context = {}, { onToken, onSources } = {}) {
+  let response
+  try {
+    response = await fetch(`${baseUrl}/api/chat/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+      body: JSON.stringify({ message, context }),
+    })
+  } catch {
+    throw new ApiError('API 서버에 연결할 수 없습니다.', { unavailable: true })
+  }
+  if (!response.ok || !response.body) {
+    let payload
+    try { payload = await response.json() } catch { payload = null }
+    throw new ApiError(payload?.message || '챗봇 응답을 불러오지 못했습니다.', { status: response.status, unavailable: response.status >= 500 })
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let completed = false
+  while (!completed) {
+    const { value, done } = await reader.read()
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done })
+    const events = buffer.split(/\r?\n\r?\n/)
+    buffer = events.pop() || ''
+    for (const event of events) {
+      const dataLine = event.split(/\r?\n/).find(line => line.startsWith('data:'))
+      if (!dataLine) continue
+      let payload
+      try { payload = JSON.parse(dataLine.slice(5).trim()) } catch { continue }
+      if (payload.type === 'token') await onToken?.(String(payload.data || ''))
+      else if (payload.type === 'sources') onSources?.(payload.data || [])
+      else if (payload.type === 'done') completed = true
+    }
+    if (done) break
+  }
+}
 export const getTours = (params, options = {}) => request(`/tours${queryString(params)}`, options)
 export async function getTour({ id, title, contentTypeId }) {
   const result = await getTours({ keyword: title, contentTypeId, page: 1, size: 50 })

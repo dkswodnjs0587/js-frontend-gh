@@ -139,7 +139,7 @@ footer{background:#242842;color:#f7f5ff}.footer-brand p,.copyright{color:#b9bdd3
 .map-canvas div:has(.map-info.map-info-group):not(.map-info):not(.map-info-list-pane):not(.map-info-list):not(.map-info-detail):not(.map-info-detail-body){border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
 
 /* 챗봇 답변 서식과 추천 질문 */
-.chat-message-text{display:block;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
+.chat-message-text{display:block;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.75;tab-size:2;word-break:keep-all}
 .chat-recommended-questions{display:grid;gap:7px;margin-top:10px}
 .chat-recommended-questions button{width:100%;padding:9px 11px;border:1px solid color-mix(in srgb,var(--primary) 38%,var(--line));border-radius:10px;background:var(--surface);color:var(--ink);text-align:left;font-size:12px;font-weight:700;line-height:1.45;transition:background .16s ease,border-color .16s ease,transform .16s ease}
 .chat-recommended-questions button:hover{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 9%,var(--surface));transform:translateX(2px)}
