@@ -269,14 +269,25 @@ async function loadTourDetail(place) {
   }
 }
 
-function infoWindowContent(group, selectedIndex = 0) {
-  const place = group[selectedIndex] || group[0]
+function infoWindowDetail(place, group) {
   const thumbnailPlace = place.thumbnail ? place : (group.find(item => item.thumbnail) || place)
   const thumbnail = thumbnailPlace.thumbnail ? `<img src="${escapeHtml(thumbnailPlace.thumbnail)}" alt="" onerror="this.parentElement.classList.add('image-missing');this.remove()">` : '<div class="map-info-placeholder">사진 준비 중</div>'
-  const placeList = group.map((item, index) => `<button type="button" class="map-info-place${index === selectedIndex ? ' selected' : ''}" data-place-index="${index}"><span style="--place-color:${item.color}">${escapeHtml(item.category)}</span><b>${escapeHtml(item.title)}</b>${item.tel ? `<small>${escapeHtml(item.tel)}</small>` : ''}</button>`).join('')
+  return `<div class="map-info-detail">${thumbnail}<div class="map-info-detail-body"><span style="--place-color:${place.color}">${escapeHtml(place.category)}</span><b>${escapeHtml(place.title)}</b><p>${escapeHtml(place.address || '주소 정보 없음')}</p>${place.tel ? `<small>${escapeHtml(place.tel)}</small>` : ''}</div></div>`
+}
+
+function infoWindowContent(group, selectedIndex = 0) {
+  const place = group[selectedIndex] || group[0]
+  const placeList = group.map((item, index) => `<button type="button" class="map-info-place${index === selectedIndex ? ' selected' : ''}" style="--place-color:${item.color}" data-place-index="${index}"><span>${escapeHtml(item.category)}</span><b>${escapeHtml(item.title)}</b>${item.tel ? `<small>${escapeHtml(item.tel)}</small>` : ''}</button>`).join('')
   const countLabel = group.length > 1 ? `<small>같은 주소의 장소 ${group.length}곳</small>` : ''
-  const selectedDetail = `<div class="map-info-detail">${thumbnail}<div class="map-info-detail-body"><span style="--place-color:${place.color}">${escapeHtml(place.category)}</span><b>${escapeHtml(place.title)}</b><p>${escapeHtml(place.address || '주소 정보 없음')}</p>${place.tel ? `<small>${escapeHtml(place.tel)}</small>` : ''}</div></div>`
-  return `<div class="map-info map-info-group"><div class="map-info-list-pane">${countLabel}<div class="map-info-list">${placeList}</div></div>${selectedDetail}</div>`
+  return `<div class="map-info map-info-group"><div class="map-info-list-pane">${countLabel}<div class="map-info-list">${placeList}</div></div>${infoWindowDetail(place, group)}</div>`
+}
+
+function updateInfoDetail(info, details, selectedIndex) {
+  if (activeInfo !== info) return
+  const selected = document.querySelector('.map-info-place.selected')
+  if (Number(selected?.dataset.placeIndex) !== selectedIndex) return
+  const detail = document.querySelector('.map-info-detail')
+  if (detail) detail.outerHTML = infoWindowDetail(details[selectedIndex], details)
 }
 
 function showSelectableInfo(info, details, selectedIndex = 0, preservedScrollTop = null) {
@@ -287,9 +298,13 @@ function showSelectableInfo(info, details, selectedIndex = 0, preservedScrollTop
     const list = document.querySelector('.map-info-list')
     if (list) list.scrollTop = scrollTop
     list?.querySelectorAll('.map-info-place[data-place-index]').forEach(button => {
-      button.addEventListener('click', () => {
+      button.addEventListener('click', async () => {
         if (activeInfo !== info) return
-        showSelectableInfo(info, details, Number(button.dataset.placeIndex), list.scrollTop)
+        const index = Number(button.dataset.placeIndex)
+        const scrollPosition = list.scrollTop
+        showSelectableInfo(info, details, index, scrollPosition)
+        details[index] = await loadTourDetail(details[index])
+        updateInfoDetail(info, details, index)
       })
     })
   })
@@ -303,8 +318,11 @@ async function openMarkerInfo(entry) {
   const info = entry.info
   activeInfo = info
   info.open(map, entry.marker)
-  const details = await Promise.all(entry.group.map(loadTourDetail))
-  if (activeInfo === info) showSelectableInfo(info, details)
+  // 그룹 목록은 정적 데이터로 즉시 표시하고, 선택한 장소의 상세만 API로 조회한다.
+  const details = [...entry.group]
+  showSelectableInfo(info, details)
+  details[0] = await loadTourDetail(details[0])
+  updateInfoDetail(info, details, 0)
 }
 
 function markerImage(color) {
@@ -515,18 +533,26 @@ async function init() {
 }
 
 let mapUpdateTimer
+let searchInputTimer
 function scheduleMapUpdate(delay = 60) {
   clearTimeout(mapUpdateTimer)
   mapUpdateTimer = setTimeout(drawMarkers, delay)
 }
 watch([selected, selectedDistricts], () => scheduleMapUpdate())
-watch(searchQuery, () => scheduleMapUpdate(180))
+watch(searchQuery, () => scheduleMapUpdate(80))
+watch(searchDraft, value => {
+  clearTimeout(searchInputTimer)
+  searchInputTimer = setTimeout(() => { searchQuery.value = value.trim() }, 80)
+})
+watch(searchType, () => scheduleMapUpdate(0))
 onMounted(init)
 onMounted(() => {
   window.addEventListener('localhub:start-tutorial', startTutorial)
   window.addEventListener('keydown', handleTutorialKeydown)
 })
 onBeforeUnmount(() => {
+  clearTimeout(searchInputTimer)
+  clearTimeout(mapUpdateTimer)
   window.removeEventListener('localhub:start-tutorial', startTutorial)
   window.removeEventListener('keydown', handleTutorialKeydown)
   document.querySelector('.tutorial-external-focus')?.classList.remove('tutorial-external-focus')

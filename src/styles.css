@@ -136,3 +136,35 @@ footer{background:#242842;color:#f7f5ff}.footer-brand p,.copyright{color:#b9bdd3
 .map-info-group .map-info-place:last-child{border:0}
 .map-info-list-pane{border-right-color:#e8e3da}
 .map-canvas div:has(> .map-info.map-info-group){border:0!important;background:transparent!important;box-shadow:none!important}
+.map-canvas div:has(.map-info.map-info-group):not(.map-info):not(.map-info-list-pane):not(.map-info-list):not(.map-info-detail):not(.map-info-detail-body){border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important}
+
+/* 챗봇 답변 서식과 추천 질문 */
+.chat-message-text{display:block;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
+.chat-recommended-questions{display:grid;gap:7px;margin-top:10px}
+.chat-recommended-questions button{width:100%;padding:9px 11px;border:1px solid color-mix(in srgb,var(--primary) 38%,var(--line));border-radius:10px;background:var(--surface);color:var(--ink);text-align:left;font-size:12px;font-weight:700;line-height:1.45;transition:background .16s ease,border-color .16s ease,transform .16s ease}
+.chat-recommended-questions button:hover{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 9%,var(--surface));transform:translateX(2px)}
+.chat-recommended-questions .chat-recommend-dismiss{border-color:transparent;background:var(--surface-2);color:var(--muted);text-align:center}
+.chat-recommended-questions .chat-recommend-dismiss:hover{border-color:transparent;background:color-mix(in srgb,var(--muted) 12%,var(--surface));color:var(--ink);transform:none}
+
+/* 같은 주소 장소 목록 카드 */
+.map-info.map-info-group{border:0;outline:1px solid rgba(53,63,58,.13);border-radius:16px;box-shadow:0 14px 38px rgba(28,40,35,.22)}
+.map-info-list-pane{padding:14px;background:#fbfaf7;border-right:1px solid #e9e5dc}
+.map-info-list-pane>small{display:flex;align-items:center;gap:6px;margin:0 4px 10px;color:#6e756f;font-size:11px}
+.map-info-list-pane>small:before{content:'⌖';display:grid;place-items:center;width:20px;height:20px;border-radius:7px;background:#e9f3ef;color:#39705f;font-size:12px}
+.map-info-group .map-info-list{gap:6px;scrollbar-width:thin;scrollbar-color:#c9c4b9 transparent}
+.map-info-group .map-info-list::-webkit-scrollbar{width:5px}.map-info-group .map-info-list::-webkit-scrollbar-thumb{background:#c9c4b9;border-radius:9px}
+.map-info-group .map-info-place{position:relative;padding:10px;border:1px solid transparent;border-radius:11px;background:#fff;box-shadow:0 2px 7px rgba(45,55,50,.05);transition:border-color .15s ease,background .15s ease,transform .15s ease}
+.map-info-group .map-info-place:hover{border-color:#d9d4ca;background:#fff;transform:translateX(2px)}
+.map-info-group .map-info-place.selected{border-color:color-mix(in srgb,var(--place-color,var(--primary)) 45%,#d9d4ca);background:#fff}
+.map-info-group .map-info-place.selected:after{content:'›';position:absolute;right:9px;top:50%;transform:translateY(-50%);color:#69736e;font-size:18px;font-weight:900}
+.map-info-detail{border-radius:0 16px 16px 0;overflow:hidden}
+@media(max-width:560px){.map-info-list-pane{border-right:0;border-bottom:1px solid #e9e5dc}.map-info-detail{border-radius:0 0 16px 16px}}
+
+/* 그룹 장소 팝업은 선 없이 면과 여백으로만 구분 */
+.map-info.map-info-group{outline:0;box-shadow:0 14px 38px rgba(28,40,35,.2)}
+.map-info-list-pane{border:0}
+.map-info-group .map-info-place,.map-info-group .map-info-place:hover,.map-info-group .map-info-place.selected{border:0;box-shadow:none}
+.map-info-group .map-info-place{background:transparent}
+.map-info-group .map-info-place:hover{background:#f2f0ea}
+.map-info-group .map-info-place.selected{background:color-mix(in srgb,var(--place-color) 11%,#fff)}
+@media(max-width:560px){.map-info-list-pane{border:0}}
