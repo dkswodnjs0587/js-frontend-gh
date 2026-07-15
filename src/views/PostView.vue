@@ -33,6 +33,10 @@ function closePassword() {
 }
 
 async function confirmPassword() {
+  if (!/^\d{4}$/.test(password.value)) {
+    error.value = '비밀번호는 숫자 4자리로 입력해주세요.'
+    return
+  }
   if (action.value === 'edit') {
     sessionStorage.setItem(`localhub-edit-password-${route.params.id}`, password.value)
     router.push({ path: '/write', query: { edit: route.params.id } })
@@ -68,9 +72,9 @@ async function confirmPassword() {
         <span class="dialog-icon">{{ action === 'delete' ? '!' : '✎' }}</span>
         <h2>{{ action === 'delete' ? '게시글을 삭제할까요?' : '게시글을 수정할까요?' }}</h2>
         <p>작성할 때 입력한 비밀번호를 확인합니다.</p>
-        <label>비밀번호<input v-model="password" type="password" inputmode="numeric" autofocus placeholder="비밀번호 입력" /></label>
+        <label>비밀번호<input v-model="password" required type="password" inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4" autofocus placeholder="숫자 4자리 입력" @input="password = $event.target.value.replace(/\D/g, '').slice(0, 4)" /></label>
         <small v-if="error" class="password-error">{{ error }}</small>
-        <small v-else class="password-hint">작성할 때 사용한 비밀번호를 입력해주세요.</small>
+        <small v-else class="password-hint">작성할 때 사용한 숫자 4자리 비밀번호를 입력해주세요.</small>
         <div class="dialog-actions"><button type="button" class="secondary-button" @click="closePassword">취소</button><button :class="['primary-button', { danger: action === 'delete' }]">{{ deleting ? '삭제했어요 ✓' : action === 'delete' ? '삭제하기' : '수정하기' }}</button></div>
       </form>
     </div>

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getPosts, getTour } from '../services/api'
 import { formatPostTime } from '../utils/date'
 
@@ -30,6 +30,19 @@ const searchQuery = ref('')
 const searchDraft = ref('')
 const searchModeOpen = ref(false)
 const likedHeroCards = ref([])
+const tutorialActive = ref(false)
+const tutorialStep = ref(0)
+const mapSectionEl = ref(null)
+const mapCardEl = ref(null)
+const communitySectionEl = ref(null)
+const communityCtaEl = ref(null)
+const tutorialSteps = [
+  { target: 'map', eyebrow: 'STEP 1 · 서울 지도', title: '지도에서 서울을 둘러보세요', text: '숫자 원은 주변 장소가 모여 있다는 뜻이에요. 지도를 확대하거나 숫자 원을 눌러 원하는 장소를 자세히 확인할 수 있어요.' },
+  { target: 'controls', eyebrow: 'STEP 2 · 탐색 도구', title: '검색과 필터로 빠르게 찾아보세요', text: '장소명·주소 검색, 카테고리 선택, 지역 선택을 함께 사용할 수 있어요. 마커를 누르면 해당 장소의 상세 정보도 볼 수 있어요.' },
+  { target: 'community', eyebrow: 'STEP 3 · 이야기 광장', title: '서울 사람들의 최신 이야기를 만나보세요', text: '지도 아래에는 최근 작성된 게시물이 보여요. 궁금한 이야기를 누르면 전체 내용을 읽고 이야기 광장으로 이동할 수 있어요.' },
+  { target: 'write', eyebrow: 'STEP 4 · 이야기 나누기', title: '나만의 서울 이야기도 남겨보세요', text: '추천 장소, 여행 질문, 생생한 후기를 익명으로 편하게 작성할 수 있어요. 이제 LocalHub Seoul을 직접 이용해보세요.' },
+  { target: 'chatbot', eyebrow: 'STEP 5 · AI 챗봇', title: '궁금한 건 쓰프에게 물어보세요', text: '어디로 갈지 고민되거나 서울 여행 정보가 필요하면 우측 하단 AI 챗봇을 활용하세요. 장소와 일정에 관한 질문을 편하게 할 수 있어요.' },
+]
 let map
 let clusterer
 let markers = []
@@ -118,6 +131,67 @@ function toggleHeroLike(card) {
   likedHeroCards.value = likedHeroCards.value.includes(card)
     ? likedHeroCards.value.filter(value => value !== card)
     : [...likedHeroCards.value, card]
+}
+
+function tutorialTarget() {
+  const target = tutorialSteps[tutorialStep.value]?.target
+  if (target === 'community') return communitySectionEl.value
+  if (target === 'write') return communityCtaEl.value
+  if (target === 'chatbot') return document.querySelector('.chat-fab')
+  return target === 'map' ? mapCardEl.value : mapSectionEl.value
+}
+
+async function showTutorialStep(step) {
+  document.querySelector('.tutorial-external-focus')?.classList.remove('tutorial-external-focus')
+  tutorialStep.value = step
+  await nextTick()
+  const target = tutorialTarget()
+  if (!target) return
+  if (tutorialSteps[step].target === 'chatbot') target.classList.add('tutorial-external-focus')
+  const rect = target.getBoundingClientRect()
+  const centeredTop = window.scrollY + rect.top - Math.max(20, (window.innerHeight - rect.height) / 2)
+  window.scrollTo({ top: centeredTop + (step === 0 ? 55 : 0), behavior: 'smooth' })
+}
+
+function startTutorial() {
+  tutorialActive.value = true
+  showTutorialStep(0)
+}
+
+function finishTutorial() {
+  tutorialActive.value = false
+  document.querySelector('.tutorial-external-focus')?.classList.remove('tutorial-external-focus')
+}
+
+function nextTutorialStep() {
+  if (tutorialStep.value === tutorialSteps.length - 1) {
+    finishTutorial()
+    return
+  }
+  showTutorialStep(tutorialStep.value + 1)
+}
+
+function previousTutorialStep() {
+  if (tutorialStep.value > 0) showTutorialStep(tutorialStep.value - 1)
+}
+
+function handleTutorialKeydown(event) {
+  if (!tutorialActive.value || event.repeat) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    finishTutorial()
+    return
+  }
+  if (event.target instanceof HTMLElement && event.target.matches('input, textarea, select, [contenteditable="true"]')) return
+  if (event.code === 'Space') {
+    event.preventDefault()
+    nextTutorialStep()
+    return
+  }
+  if (event.key === 'Backspace' && tutorialStep.value > 0) {
+    event.preventDefault()
+    previousTutorialStep()
+  }
 }
 
 function prepareSsafy() {
@@ -367,11 +441,20 @@ function scheduleMapUpdate(delay = 60) {
 watch([selected, selectedDistricts], () => scheduleMapUpdate())
 watch(searchQuery, () => scheduleMapUpdate(180))
 onMounted(init)
+onMounted(() => {
+  window.addEventListener('localhub:start-tutorial', startTutorial)
+  window.addEventListener('keydown', handleTutorialKeydown)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('localhub:start-tutorial', startTutorial)
+  window.removeEventListener('keydown', handleTutorialKeydown)
+  document.querySelector('.tutorial-external-focus')?.classList.remove('tutorial-external-focus')
+})
 </script>
 
 <template>
   <section class="hero">
-    <div class="hero-copy"><span class="eyebrow">서울을 더 가까이</span><h1>오늘, 서울 어디로<br><em>가볼까요?</em></h1><p>관광 명소부터 동네 주민의 생생한 이야기까지.<br>서울의 모든 순간을 한곳에서 만나보세요.</p><a href="#map" class="primary-button">서울 탐색 시작하기 <span>↓</span></a></div>
+    <div class="hero-copy"><span class="eyebrow">서울을 더 가까이</span><h1>오늘, 서울 어디로<br><em>가볼까요?</em></h1><p>관광 명소부터 동네 주민의 생생한 이야기까지.<br>서울의 모든 순간을 한곳에서 만나보세요.</p><a href="#map" class="primary-button" @click.prevent="startTutorial">서울 탐색 시작하기 <span>↓</span></a></div>
     <div class="hero-art seoul-social-art">
       <article v-for="card in [{ id:'tower', label:'남산타워' }, { id:'gate', label:'광화문' }, { id:'food', label:'비빔밥' }, { id:'hanbok', label:'한복 여행' }]" :key="card.id" :class="['social-card', `social-${card.id}`]">
         <div :class="['social-photo', `photo-${card.id}`]" role="img" :aria-label="card.label"></div>
@@ -381,22 +464,22 @@ onMounted(init)
     </div>
   </section>
 
-  <section id="map" class="map-section page-section">
+  <section id="map" ref="mapSectionEl" class="map-section page-section">
     <div class="section-heading"><div><span class="eyebrow">SEOUL MAP</span><h2>지도로 만나는 서울</h2><p>관심 있는 카테고리를 골라 나만의 서울을 발견해보세요.</p></div><div class="place-count"><b>{{ filteredPlaces.length.toLocaleString() }}</b><span>개의 장소</span></div></div>
-    <div class="map-card main-map-card">
+    <div ref="mapCardEl" :class="['map-card main-map-card', { 'tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'map', 'tutorial-controls-group': tutorialActive && tutorialSteps[tutorialStep].target === 'controls' }]">
       <div ref="mapEl" class="map-canvas" :class="{ placeholder: mapError }">
         <div v-if="loading" class="map-state"><span class="loader"></span><b>서울을 불러오는 중이에요</b></div>
         <div v-else-if="mapError" class="map-state"><div class="mini-map-art"><i v-for="n in 7" :key="n" :style="`--i:${n}`"></i><strong>서울</strong></div><b>{{ mapError }}</b><small>.env 파일에 VITE_KAKAO_MAP_KEY를 추가해 주세요.</small></div>
       </div>
       <div class="map-zoom" aria-label="지도 확대 축소"><button @click="zoomIn" aria-label="지도 확대">＋</button><button @click="zoomOut" aria-label="지도 축소">−</button></div>
-      <button class="district-trigger" @click="districtOpen = true"><span>⌖</span><strong>{{ selectedDistricts.length ? `지역 ${selectedDistricts.length}곳` : '지역 선택' }}</strong><i>›</i></button>
-      <form class="map-search" @submit.prevent="applySearch">
+      <button :class="['district-trigger', { 'tutorial-control-member': tutorialActive && tutorialSteps[tutorialStep].target === 'controls' }]" @click="districtOpen = true"><span>⌖</span><strong>{{ selectedDistricts.length ? `지역 ${selectedDistricts.length}곳` : '지역 선택' }}</strong><i>›</i></button>
+      <form :class="['map-search', { 'tutorial-control-member': tutorialActive && tutorialSteps[tutorialStep].target === 'controls' }]" @submit.prevent="applySearch">
         <span class="search-mode-wrap"><button type="button" class="search-mode" @click="searchModeOpen = !searchModeOpen" :aria-expanded="searchModeOpen"><strong>{{ searchType === 'title' ? '장소명' : '주소' }}</strong><i>{{ searchModeOpen ? '⌃' : '⌄' }}</i></button><span v-if="searchModeOpen" class="search-mode-menu"><button type="button" :class="{ active: searchType === 'title' }" @click="chooseSearchType('title')">장소명</button><button type="button" :class="{ active: searchType === 'address' }" @click="chooseSearchType('address')">주소</button></span></span>
         <input v-model="searchDraft" :placeholder="searchType === 'title' ? '장소명을 검색해보세요' : '주소를 검색해보세요'" />
         <button v-if="searchDraft || searchQuery" type="button" class="search-clear" @click="clearSearch" aria-label="검색어 지우기">×</button>
         <button type="submit" class="search-submit">검색</button>
       </form>
-      <aside :class="['map-filter', { open: filterOpen }]">
+      <aside :class="['map-filter', { open: filterOpen, 'tutorial-control-member': tutorialActive && tutorialSteps[tutorialStep].target === 'controls' }]">
         <button class="filter-toggle" @click="filterOpen = !filterOpen" :aria-expanded="filterOpen"><span>◉</span> 카테고리 <b>{{ selected.length }}</b><i>{{ filterOpen ? '⌃' : '⌄' }}</i></button>
         <div class="filter-content"><div class="filter-head"><strong>어떤 곳을 찾으세요?</strong><button @click="selected = categories.map(c => c.id)">전체 선택</button></div><button v-for="category in categories" :key="category.id" :class="['filter-chip', { active: selected.includes(category.id) }]" @click="toggleCategory(category.id)"><span class="category-icon" :style="{ background: category.color }">{{ category.icon }}</span>{{ category.label }}<i>{{ selected.includes(category.id) ? '✓' : '' }}</i></button></div>
       </aside>
@@ -418,11 +501,21 @@ onMounted(init)
     </div>
   </section>
 
-  <section class="community-preview page-section">
+  <section ref="communitySectionEl" :class="['community-preview page-section', { 'tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'community' }]">
     <div class="section-heading"><div><span class="eyebrow">LOCAL STORIES</span><h2>지금, 서울 사람들의 이야기</h2><p>익명으로 편하게 묻고, 나만의 서울을 나눠보세요.</p></div><router-link to="/community" class="text-link">이야기 전체 보기 →</router-link></div>
     <div class="post-grid"><router-link v-for="post in posts" :key="post.id" :to="`/posts/${post.id}`" class="post-card"><span class="post-category" :style="{ '--tag': post.color }">{{ post.category }}</span><h3>{{ post.title }}</h3><p>{{ post.content }}</p><div class="post-meta"><span>익명의 서울러 · {{ post.time }}</span></div></router-link></div>
-    <div class="community-cta"><div class="cta-icon">✎</div><div><strong>당신이 발견한 서울은 어떤 모습인가요?</strong><p>지금 이 순간의 동네 이야기를 들려주세요.</p></div><router-link to="/write" class="primary-button">이야기 남기기</router-link></div>
+    <div ref="communityCtaEl" :class="['community-cta', { 'tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'write' }]"><div class="cta-icon">✎</div><div><strong>당신이 발견한 서울은 어떤 모습인가요?</strong><p>지금 이 순간의 동네 이야기를 들려주세요.</p></div><router-link to="/write" class="primary-button">이야기 남기기</router-link></div>
   </section>
+
+  <div v-if="tutorialActive" class="tutorial-backdrop" aria-hidden="true" @click="nextTutorialStep"></div>
+  <aside v-if="tutorialActive" class="tutorial-guide" role="dialog" aria-live="polite" aria-label="사이트 이용 튜토리얼">
+    <button class="tutorial-close" @click="finishTutorial" aria-label="튜토리얼 닫기"><kbd>Esc</kbd><span>×</span></button>
+    <span class="eyebrow">{{ tutorialSteps[tutorialStep].eyebrow }}</span>
+    <h3>{{ tutorialSteps[tutorialStep].title }}</h3>
+    <p>{{ tutorialSteps[tutorialStep].text }}</p>
+    <div class="tutorial-dots"><i v-for="(_, index) in tutorialSteps" :key="index" :class="{ active: index === tutorialStep }"></i></div>
+    <div class="tutorial-actions"><button v-if="tutorialStep" class="secondary-button" @click="previousTutorialStep"><kbd>Backspace</kbd>이전</button><button class="primary-button" @click="nextTutorialStep"><kbd>Space</kbd>{{ tutorialStep === tutorialSteps.length - 1 ? '사이트 이용하기' : '다음' }} <span>→</span></button></div>
+  </aside>
 </template>
 
 <style scoped>
@@ -434,13 +527,25 @@ onMounted(init)
 
 .social-actions .like-button,.social-actions .comment-button{display:grid;place-items:center;width:25px;height:25px;color:var(--ink)}.social-actions .comment-button{cursor:default}.like-button svg,.comment-button svg{display:block;width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.like-button.liked svg{fill:#f05f64;stroke:#f05f64}.comment-button svg{transform:scaleX(-1)}.comment-button:hover svg{animation:comment-wiggle-flipped .4s ease}.bubble-camera{background:#d8d4ff;color:#3f3b69}.bubble-food{background:#d5f3e8;color:#245e4b}.bubble-food svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.camera-icon{position:relative;width:27px;height:19px;border:3px solid currentColor;border-radius:5px}.camera-icon:before{content:'';position:absolute;left:50%;top:50%;width:7px;height:7px;border:3px solid currentColor;border-radius:50%;transform:translate(-50%,-50%)}.camera-icon:after{content:'';position:absolute;left:3px;top:-7px;width:10px;height:6px;border:3px solid currentColor;border-bottom:0;border-radius:4px 4px 0 0}@keyframes comment-wiggle-flipped{25%{transform:scaleX(-1) rotate(-8deg)}75%{transform:scaleX(-1) rotate(8deg)}100%{transform:scaleX(-1)}}
 
+.tutorial-backdrop{position:fixed;z-index:60;inset:0;background:rgba(14,20,18,.58);pointer-events:none}.tutorial-focus{position:relative;z-index:70;scroll-margin-top:90px}.tutorial-guide{position:fixed;z-index:90;left:50%;bottom:28px;transform:translateX(-50%);width:min(520px,calc(100vw - 32px));padding:25px 27px 22px;border:2px solid var(--ink);border-radius:22px;background:var(--surface);color:var(--ink);box-shadow:9px 11px 0 var(--ink),0 25px 80px rgba(0,0,0,.32);animation:tutorial-in .2s ease-out}.tutorial-guide .eyebrow{margin-bottom:6px}.tutorial-guide h3{margin:0 34px 8px 0;font-size:23px;letter-spacing:-.7px}.tutorial-guide p{margin:0;color:var(--muted);font-size:14px;line-height:1.7}.tutorial-close{position:absolute;top:14px;right:14px;width:34px;height:34px;border:0;border-radius:50%;background:var(--surface-2);color:var(--ink);font-size:22px}.tutorial-dots{display:flex;gap:6px;margin-top:18px}.tutorial-dots i{width:7px;height:7px;border-radius:99px;background:var(--line);transition:width .2s ease,background .2s ease}.tutorial-dots i.active{width:24px;background:var(--primary)}.tutorial-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:-18px}.tutorial-actions .primary-button,.tutorial-actions .secondary-button{padding:11px 17px}.tutorial-actions .secondary-button{border:1px solid var(--line)}@keyframes tutorial-in{from{opacity:0;transform:translate(-50%,8px) scale(.98)}to{opacity:1;transform:translateX(-50%)}}
+@media(max-width:560px){.tutorial-guide{bottom:16px;padding:21px 20px 18px}.tutorial-guide h3{font-size:20px}.tutorial-guide p{font-size:13px}.tutorial-actions{margin-top:15px}.tutorial-dots{margin-top:14px}.tutorial-actions .primary-button,.tutorial-actions .secondary-button{padding:10px 14px}}
+
+.tutorial-control-member{z-index:75!important}.tutorial-controls-group:after{content:'';position:absolute;z-index:74;left:23px;right:23px;top:23px;height:60px;border:3px solid color-mix(in srgb,var(--primary) 72%,white);border-radius:17px;background:color-mix(in srgb,var(--surface) 10%,transparent);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 20%,transparent),0 10px 28px rgba(0,0,0,.24);pointer-events:none}
+@media(max-width:850px){.tutorial-controls-group:after{left:10px;right:10px;top:10px;height:116px}}
+.tutorial-controls-group:after{height:54px}
+@media(max-width:850px){.tutorial-controls-group:after{height:114px}}
+
+.tutorial-close{width:auto;min-width:76px;padding:0 10px;gap:7px;display:flex;align-items:center;justify-content:center}.tutorial-close kbd,.tutorial-actions kbd{padding:3px 6px;border:1.5px solid currentColor;border-bottom-width:2px;border-radius:6px;background:color-mix(in srgb,currentColor 10%,transparent);font:900 11px Nunito;line-height:1;opacity:.92}.tutorial-close span{font-size:21px;line-height:1}.tutorial-actions .primary-button,.tutorial-actions .secondary-button{gap:8px}.tutorial-actions .primary-button kbd{color:inherit}.hero h1 em:after{background:currentColor}
+.tutorial-guide h3{margin-right:76px}
+.tutorial-backdrop{pointer-events:auto;cursor:pointer}
+
 .main-map-card {
-  height: 700px;
+  height: 650px;
 }
 
 @media (max-width: 560px) {
   .main-map-card {
-    height: 680px;
+    height: 620px;
   }
 }
 </style>
