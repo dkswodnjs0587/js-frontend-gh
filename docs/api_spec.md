@@ -229,7 +229,36 @@
 }
 ```
 
-### 5.7 POST `/api/chat`
+### 5.7 GET `/api/tours/{tourId}`
+
+지도 마커를 클릭했을 때 장소 한 건의 상세 정보를 조회한다. 지도 좌표와 마커 생성은 프론트엔드 정적 데이터가 담당하며, 이 API는 마커 선택 이후에만 호출한다.
+
+#### Path Parameters
+
+- `tourId`: 정적 지도 데이터의 `contentid`와 일치하는 장소 식별자
+
+#### Response
+
+```json
+{
+  "success": true,
+  "message": "ok",
+  "data": {
+    "id": 1059877,
+    "contentTypeId": 12,
+    "title": "장소명",
+    "add1": "서울특별시 ...",
+    "tel": "02-000-0000",
+    "mapx": 126.902365881,
+    "mapy": 37.5382819489,
+    "firstimage2": "https://..."
+  }
+}
+```
+
+장소가 없으면 HTTP 404와 공통 실패 응답을 반환한다.
+
+### 5.8 POST `/api/chat`
 
 사용자 질문을 받아 지역 정보 기반 답변을 생성한다.
 

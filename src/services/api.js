@@ -49,14 +49,10 @@ export const createPost = body => request('/posts', { method: 'POST', body })
 export const updatePost = (postId, body) => request(`/posts/${encodeURIComponent(postId)}`, { method: 'PUT', body })
 export const deletePost = (postId, password) => request(`/posts/${encodeURIComponent(postId)}`, { method: 'DELETE', body: { password } })
 export const sendChat = (message, context = {}) => request('/chat', { method: 'POST', body: { message, context } })
-
-export async function getAllTours({ size = 500 } = {}) {
-  const first = await request(`/tours${queryString({ page: 1, size })}`)
-  const items = [...(first?.items || [])]
-  const totalPages = Number(first?.totalPages || 1)
-  for (let page = 2; page <= totalPages; page += 1) {
-    const next = await request(`/tours${queryString({ page, size })}`)
-    items.push(...(next?.items || []))
-  }
-  return items
+export async function getTour({ id, title, contentTypeId }) {
+  const result = await request(`/tours${queryString({ keyword: title, contentTypeId, page: 1, size: 50 })}`)
+  const items = result?.items || []
+  const detail = items.find(item => String(item.id ?? item.contentid) === String(id))
+  if (!detail) throw new ApiError('선택한 장소 정보를 찾지 못했습니다.', { status: 404 })
+  return detail
 }

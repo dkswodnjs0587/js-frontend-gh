@@ -51,7 +51,7 @@ async function confirmPassword() {
 
 <template>
   <div class="subpage narrow page-section">
-    <router-link to="/community" class="back-link">← 이야기 목록</router-link>
+    <router-link to="/community" class="back-link"><span>←</span> 이야기 광장</router-link>
     <article class="post-detail">
       <span class="post-category" :style="{ '--tag': category[1] }">{{ category[0] }}</span>
       <h1>{{ loading ? '이야기를 불러오는 중이에요' : post.title }}</h1>
@@ -76,3 +76,31 @@ async function confirmPassword() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 800;
+  box-shadow: 0 5px 14px rgba(45, 55, 50, 0.08);
+  transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.back-link span {
+  color: var(--primary);
+  font-size: 18px;
+}
+
+.back-link:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  transform: translateX(-2px);
+  box-shadow: 0 7px 18px rgba(45, 55, 50, 0.12);
+}
+</style>

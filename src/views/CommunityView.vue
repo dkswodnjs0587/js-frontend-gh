@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { getPosts } from '../services/api'
+import { formatPostTime } from '../utils/date'
 const query = ref('')
 const active = ref('전체')
 const categories = [
@@ -23,17 +24,16 @@ const fallbackPosts = [
 ]
 const posts = ref(fallbackPosts)
 const categoryById = { 12: '관광지', 14: '문화시설', 15: '축제·공연', 25: '여행코스', 28: '레포츠', 32: '숙박', 38: '쇼핑' }
-const formatTime = value => value ? String(value).slice(0, 10).replaceAll('-', '.') : ''
 const filtered = computed(() => posts.value.filter(p => (active.value === '전체' || p.category === active.value) && (`${p.title} ${p.content}`.includes(query.value))))
 const categoryColor = label => categories.find(category => category.label === label)?.color || '#6973c7'
 
 onMounted(async () => {
   try {
     const data = await getPosts({ page: 1, size: 100 })
-    posts.value = (data?.items || []).map(post => ({
+    posts.value = (data?.items || []).sort((a, b) => new Date(b.createdtime) - new Date(a.createdtime)).map(post => ({
       ...post,
       category: categoryById[post.contentTypeId] || '관광지',
-      time: formatTime(post.createdtime),
+      time: formatPostTime(post.createdtime),
     }))
   } catch (error) {
     if (!error.unavailable) console.warn(error.message)

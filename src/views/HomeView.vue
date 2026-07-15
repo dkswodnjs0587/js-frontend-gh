@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { getAllTours } from '../services/api'
+import { getPosts, getTour } from '../services/api'
+import { formatPostTime } from '../utils/date'
 
 const categories = [
   { id: '12', label: '관광지', icon: '⌖', color: '#ff7b6b', file: '서울_관광지.json' },
@@ -28,6 +29,7 @@ const searchType = ref('title')
 const searchQuery = ref('')
 const searchDraft = ref('')
 const searchModeOpen = ref(false)
+const likedHeroCards = ref([])
 let map
 let clusterer
 let markers = []
@@ -35,6 +37,8 @@ let activeInfo
 let ssafyMarker
 let ssafyInfo
 const markerImages = new Map()
+const markerCache = new Map()
+const tourDetailCache = new Map()
 
 const filteredPlaces = computed(() => {
   if (easterMode.value) return []
@@ -47,11 +51,33 @@ const filteredPlaces = computed(() => {
     return categoryMatch && districtMatch && searchMatch
   })
 })
-const posts = [
+const fallbackPosts = [
   { id: 1, category: '관광지', color: '#ff7b6b', title: '이번 주말, 한강 피크닉 어디가 좋을까요?', content: '조용하고 노을 보기 좋은 한강공원을 찾고 있어요. 돗자리 펴기 좋은 곳 추천해주세요!', time: '12분 전', comments: 8 },
   { id: 2, category: '축제·공연', color: '#f3ab35', title: '서울숲 야외 공연 다녀오신 분?', content: '이번 주 공연 분위기랑 근처에서 저녁 먹기 좋은 곳도 궁금해요.', time: '34분 전', comments: 5 },
   { id: 3, category: '문화시설', color: '#8b7cf6', title: '비 오는 날 가기 좋은 전시 추천해요', content: '서촌에서 우연히 발견한 작은 전시인데 공간도 작품도 정말 좋았어요.', time: '1시간 전', comments: 12 },
 ]
+const posts = ref(fallbackPosts)
+const categoryById = { 12: '관광지', 14: '문화시설', 15: '축제·공연', 25: '여행코스', 28: '레포츠', 32: '숙박', 38: '쇼핑' }
+
+async function loadRecentPosts() {
+  try {
+    const data = await getPosts({ page: 1, size: 100 })
+    posts.value = (data?.items || [])
+      .sort((a, b) => new Date(b.createdtime) - new Date(a.createdtime))
+      .slice(0, 3)
+      .map(post => {
+        const category = categoryById[post.contentTypeId] || '관광지'
+        return {
+          ...post,
+          category,
+          color: categories.find(item => item.label === category)?.color || '#6973c7',
+          time: formatPostTime(post.createdtime),
+        }
+      })
+  } catch (error) {
+    if (!error.unavailable) console.warn(error.message)
+  }
+}
 
 function toggleCategory(id) {
   selected.value = selected.value.includes(id) ? selected.value.filter(v => v !== id) : [...selected.value, id]
@@ -86,6 +112,12 @@ function applySearch() {
 function clearSearch() {
   searchDraft.value = ''
   searchQuery.value = ''
+}
+
+function toggleHeroLike(card) {
+  likedHeroCards.value = likedHeroCards.value.includes(card)
+    ? likedHeroCards.value.filter(value => value !== card)
+    : [...likedHeroCards.value, card]
 }
 
 function prepareSsafy() {
@@ -128,6 +160,56 @@ function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character])
 }
 
+function normalizePlace(item, fallback = {}) {
+  const type = String(item.contentTypeId ?? item.contenttypeid ?? fallback.type ?? '')
+  const category = categories.find(value => value.id === type)
+  return {
+    ...fallback,
+    id: item.id ?? item.contentid ?? fallback.id,
+    title: item.title ?? fallback.title,
+    address: item.add1 ?? item.addr1 ?? fallback.address ?? '',
+    tel: item.tel ?? fallback.tel ?? '',
+    thumbnail: item.firstimage2 || item.firstimage || fallback.thumbnail || '',
+    lat: Number(item.mapy ?? fallback.lat),
+    lng: Number(item.mapx ?? fallback.lng),
+    type,
+    category: category?.label || fallback.category || '기타',
+    color: category?.color || fallback.color || '#6973c7',
+  }
+}
+
+async function loadTourDetail(place) {
+  if (tourDetailCache.has(place.id)) return tourDetailCache.get(place.id)
+  try {
+    const detail = normalizePlace(await getTour({ id: place.id, title: place.title, contentTypeId: place.type }), place)
+    tourDetailCache.set(place.id, detail)
+    return detail
+  } catch {
+    return place
+  }
+}
+
+function infoWindowContent(group) {
+  const place = group[0]
+  const thumbnailPlace = group.find(item => item.thumbnail) || place
+  const thumbnail = thumbnailPlace.thumbnail ? `<img src="${escapeHtml(thumbnailPlace.thumbnail)}" alt="" onerror="this.parentElement.classList.add('image-missing');this.remove()">` : '<div class="map-info-placeholder">사진 준비 중</div>'
+  const placeList = group.map(item => `<div class="map-info-place"><span style="--place-color:${item.color}">${escapeHtml(item.category)}</span><b>${escapeHtml(item.title)}</b>${item.tel ? `<small>${escapeHtml(item.tel)}</small>` : ''}</div>`).join('')
+  const countLabel = group.length > 1 ? `<small>같은 주소의 장소 ${group.length}곳</small>` : ''
+  return `<div class="map-info map-info-group">${thumbnail}<div class="map-info-body">${countLabel}<div class="map-info-list">${placeList}</div><p>${escapeHtml(place.address || '주소 정보 없음')}</p></div></div>`
+}
+
+async function openMarkerInfo(entry) {
+  activeInfo?.close()
+  if (!entry.info) {
+    entry.info = new window.kakao.maps.InfoWindow({ removable: false, content: '<div class="map-info"><div class="map-info-body"><b>장소 정보를 불러오는 중이에요</b></div></div>' })
+  }
+  const info = entry.info
+  activeInfo = info
+  info.open(map, entry.marker)
+  const details = await Promise.all(entry.group.map(loadTourDetail))
+  if (activeInfo === info) info.setContent(infoWindowContent(details))
+}
+
 function markerImage(color) {
   if (markerImages.has(color)) return markerImages.get(color)
   const canvas = document.createElement('canvas')
@@ -159,8 +241,22 @@ function transparentMarkerImage() {
   return image
 }
 
-function zoomIn() { if (map) map.setLevel(Math.max(1, map.getLevel() - 1), { animate: true }) }
-function zoomOut() { if (map) map.setLevel(Math.min(14, map.getLevel() + 1), { animate: true }) }
+function zoomIn() { if (map) map.setLevel(Math.max(1, map.getLevel() - 1)) }
+function zoomOut() { if (map) map.setLevel(Math.min(14, map.getLevel() + 1)) }
+
+function clusterStyles() {
+  const sizes = [42, 48, 54, 60]
+  if (selected.value.length === 1) {
+    const color = categories.find(category => category.id === selected.value[0])?.color || '#6973c7'
+    return sizes.map(size => ({ width:`${size}px`, height:`${size}px`, background:color, border:'3px solid #fff', borderRadius:`${size / 2}px`, color:'#fff', textAlign:'center', fontWeight:'900', lineHeight:`${size - 6}px`, boxShadow:`0 6px 16px ${color}66` }))
+  }
+  return [
+    { width:'42px', height:'42px', background:'#ffd7d1', border:'3px solid #fff7f3', borderRadius:'21px', color:'#814b45', textAlign:'center', fontWeight:'900', lineHeight:'36px', boxShadow:'0 6px 16px #70534d33' },
+    { width:'48px', height:'48px', background:'#d8d4ff', border:'3px solid #f8f6ff', borderRadius:'24px', color:'#524b93', textAlign:'center', fontWeight:'900', lineHeight:'42px', boxShadow:'0 6px 16px #524b9333' },
+    { width:'54px', height:'54px', background:'#c8eadf', border:'3px solid #f2fff9', borderRadius:'27px', color:'#39705f', textAlign:'center', fontWeight:'900', lineHeight:'48px', boxShadow:'0 6px 16px #39705f33' },
+    { width:'60px', height:'60px', background:'#ffe49a', border:'3px solid #fff9e8', borderRadius:'30px', color:'#775e1e', textAlign:'center', fontWeight:'900', lineHeight:'54px', boxShadow:'0 6px 16px #775e1e33' },
+  ]
+}
 
 function revealSsafy() {
   if (!map || !window.kakao) return
@@ -213,65 +309,45 @@ function drawMarkers() {
     if (!addressGroups.has(key)) addressGroups.set(key, [])
     addressGroups.get(key).push(place)
   })
-  markers = [...addressGroups.values()].flatMap(group => {
+  markers = [...addressGroups.entries()].flatMap(([key, group]) => {
     const place = group[0]
-    const marker = new window.kakao.maps.Marker({ position: new window.kakao.maps.LatLng(place.lat, place.lng), title: group.length > 1 ? `${place.title} 외 ${group.length - 1}곳` : place.title, image: markerImage(place.color) })
-    let info
-    window.kakao.maps.event.addListener(marker, 'click', () => {
-      activeInfo?.close()
-      if (!info) {
-        const thumbnailPlace = group.find(item => item.thumbnail) || place
-        const thumbnail = thumbnailPlace.thumbnail ? `<img src="${escapeHtml(thumbnailPlace.thumbnail)}" alt="" onerror="this.parentElement.classList.add('image-missing');this.remove()">` : '<div class="map-info-placeholder">사진 준비 중</div>'
-        const placeList = group.map(item => `<div class="map-info-place"><span style="--place-color:${item.color}">${escapeHtml(item.category)}</span><b>${escapeHtml(item.title)}</b></div>`).join('')
-        const countLabel = group.length > 1 ? `<small>같은 주소의 장소 ${group.length}곳</small>` : ''
-        info = new window.kakao.maps.InfoWindow({ removable: false, content: `<div class="map-info map-info-group">${thumbnail}<div class="map-info-body">${countLabel}<div class="map-info-list">${placeList}</div><p>${escapeHtml(place.address || '주소 정보 없음')}</p></div></div>` })
-      }
-      activeInfo = info
-      info.open(map, marker)
-    })
-    const countMarkers = Array.from({ length: group.length - 1 }, () => new window.kakao.maps.Marker({ position: marker.getPosition(), image: transparentMarkerImage(), clickable: false, zIndex: -1 }))
-    return [marker, ...countMarkers]
+    const position = new window.kakao.maps.LatLng(place.lat, place.lng)
+    const title = group.length > 1 ? `${place.title} 외 ${group.length - 1}곳` : place.title
+    let entry = markerCache.get(key)
+    if (!entry) {
+      const marker = new window.kakao.maps.Marker({ position, title, image: markerImage(place.color) })
+      entry = { marker, group, info: null, countMarkers: [] }
+      markerCache.set(key, entry)
+      window.kakao.maps.event.addListener(marker, 'click', () => openMarkerInfo(entry))
+    } else {
+      entry.group = group
+      entry.info = null
+      entry.marker.setPosition(position)
+      entry.marker.setTitle(title)
+      entry.marker.setImage(markerImage(place.color))
+    }
+    const extraCount = group.length - 1
+    while (entry.countMarkers.length < extraCount) {
+      entry.countMarkers.push(new window.kakao.maps.Marker({ position, image: transparentMarkerImage(), clickable: false, zIndex: -1 }))
+    }
+    entry.countMarkers.forEach(marker => marker.setPosition(position))
+    return [entry.marker, ...entry.countMarkers.slice(0, extraCount)]
   })
-  if (!clusterer) clusterer = new window.kakao.maps.MarkerClusterer({ map, averageCenter: true, minLevel: 3, minClusterSize: 2, gridSize: 110, disableClickZoom: false, calculator: [10, 50, 100], styles: [
-    { width:'42px', height:'42px', background:'#ffd7d1', border:'3px solid #fff7f3', borderRadius:'21px', color:'#814b45', textAlign:'center', fontWeight:'900', lineHeight:'36px', boxShadow:'0 6px 16px #70534d33' },
-    { width:'48px', height:'48px', background:'#d8d4ff', border:'3px solid #f8f6ff', borderRadius:'24px', color:'#524b93', textAlign:'center', fontWeight:'900', lineHeight:'42px', boxShadow:'0 6px 16px #524b9333' },
-    { width:'54px', height:'54px', background:'#c8eadf', border:'3px solid #f2fff9', borderRadius:'27px', color:'#39705f', textAlign:'center', fontWeight:'900', lineHeight:'48px', boxShadow:'0 6px 16px #39705f33' },
-    { width:'60px', height:'60px', background:'#ffe49a', border:'3px solid #fff9e8', borderRadius:'30px', color:'#775e1e', textAlign:'center', fontWeight:'900', lineHeight:'54px', boxShadow:'0 6px 16px #775e1e33' }
-  ] })
+  if (!clusterer) clusterer = new window.kakao.maps.MarkerClusterer({ map, averageCenter: false, minLevel: 1, minClusterSize: 2, gridSize: 180, disableClickZoom: false, calculator: [10, 50, 100], styles: clusterStyles() })
+  else clusterer.setStyles(clusterStyles())
   clusterer.addMarkers(markers, true)
   clusterer.redraw()
 }
 
 async function init() {
   loadDistrictShapes().catch(() => {})
+  loadRecentPosts()
   try {
-    let items
-    try {
-      items = await getAllTours()
-    } catch (error) {
-      if (!error.unavailable) throw error
-      const loaded = await Promise.all(categories.map(async category => {
-        const json = await fetch(`/${category.file}`).then(r => { if (!r.ok) throw new Error(); return r.json() })
-        return json.items
-      }))
-      items = loaded.flat()
-    }
-    places.value = items.map(item => {
-      const type = String(item.contentTypeId ?? item.contenttypeid ?? '')
-      const category = categories.find(value => value.id === type)
-      return {
-        id: item.id ?? item.contentid,
-        title: item.title,
-        address: item.add1 ?? item.addr1 ?? '',
-        tel: item.tel ?? '',
-        thumbnail: item.firstimage2 || item.firstimage || '',
-        lat: Number(item.mapy),
-        lng: Number(item.mapx),
-        type,
-        category: category?.label || '기타',
-        color: category?.color || '#6973c7',
-      }
-    }).filter(place => categories.some(category => category.id === place.type) && Number.isFinite(place.lat) && Number.isFinite(place.lng))
+    const loaded = await Promise.all(categories.map(async category => {
+      const json = await fetch(`/${category.file}`).then(response => { if (!response.ok) throw new Error(); return response.json() })
+      return json.items
+    }))
+    places.value = loaded.flat().map(item => normalizePlace(item)).filter(place => categories.some(category => category.id === place.type) && Number.isFinite(place.lat) && Number.isFinite(place.lng))
   } catch { mapError.value = '서울 장소 데이터를 불러오지 못했습니다.' }
   loading.value = false
   await nextTick()
@@ -283,24 +359,31 @@ async function init() {
   } catch (error) { mapError.value = error.message }
 }
 
-let searchTimer
-watch([selected, selectedDistricts], drawMarkers)
-watch(searchQuery, () => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(drawMarkers, 180)
-})
+let mapUpdateTimer
+function scheduleMapUpdate(delay = 60) {
+  clearTimeout(mapUpdateTimer)
+  mapUpdateTimer = setTimeout(drawMarkers, delay)
+}
+watch([selected, selectedDistricts], () => scheduleMapUpdate())
+watch(searchQuery, () => scheduleMapUpdate(180))
 onMounted(init)
 </script>
 
 <template>
   <section class="hero">
     <div class="hero-copy"><span class="eyebrow">서울을 더 가까이</span><h1>오늘, 서울 어디로<br><em>가볼까요?</em></h1><p>관광 명소부터 동네 주민의 생생한 이야기까지.<br>서울의 모든 순간을 한곳에서 만나보세요.</p><a href="#map" class="primary-button">서울 탐색 시작하기 <span>↓</span></a></div>
-    <div class="hero-art" aria-hidden="true"><div class="sun"></div><div class="tower">⌖</div><div class="person"><span>●</span><b>서울</b></div><div class="art-card art-food">♨<small>숨은 맛집</small></div><div class="art-card art-place">♧<small>산책 명소</small></div><div class="spark s1">✦</div><div class="spark s2">✦</div></div>
+    <div class="hero-art seoul-social-art">
+      <article v-for="card in [{ id:'tower', label:'남산타워' }, { id:'gate', label:'광화문' }, { id:'food', label:'비빔밥' }, { id:'hanbok', label:'한복 여행' }]" :key="card.id" :class="['social-card', `social-${card.id}`]">
+        <div :class="['social-photo', `photo-${card.id}`]" role="img" :aria-label="card.label"></div>
+        <div class="social-actions"><button type="button" :class="['like-button', { liked: likedHeroCards.includes(card.id) }]" @click="toggleHeroLike(card.id)" :aria-label="`${card.label} 좋아요`"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.7-7.5 1.1-1.1a5.5 5.5 0 0 0 0-7.8Z"/></svg></button><button type="button" class="comment-button" aria-label="댓글 장식" tabindex="-1"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 9.3 9.3 0 0 1-3.8-.9L3 21l1.9-5a8.4 8.4 0 1 1 16.1-4.5Z"/></svg></button><b>{{ card.label }}</b></div>
+      </article>
+      <span class="hero-bubble bubble-camera" aria-hidden="true"><i class="camera-icon"></i></span><span class="hero-bubble bubble-food" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M8 3v8M12 3v8M16 3v8M12 3v26M8 11c0 3 8 3 8 0M24 3c-4 3-4 10 0 12v14M24 3v12"/></svg></span><span class="hero-bubble bubble-route" aria-hidden="true">✦</span>
+    </div>
   </section>
 
   <section id="map" class="map-section page-section">
     <div class="section-heading"><div><span class="eyebrow">SEOUL MAP</span><h2>지도로 만나는 서울</h2><p>관심 있는 카테고리를 골라 나만의 서울을 발견해보세요.</p></div><div class="place-count"><b>{{ filteredPlaces.length.toLocaleString() }}</b><span>개의 장소</span></div></div>
-    <div class="map-card">
+    <div class="map-card main-map-card">
       <div ref="mapEl" class="map-canvas" :class="{ placeholder: mapError }">
         <div v-if="loading" class="map-state"><span class="loader"></span><b>서울을 불러오는 중이에요</b></div>
         <div v-else-if="mapError" class="map-state"><div class="mini-map-art"><i v-for="n in 7" :key="n" :style="`--i:${n}`"></i><strong>서울</strong></div><b>{{ mapError }}</b><small>.env 파일에 VITE_KAKAO_MAP_KEY를 추가해 주세요.</small></div>
@@ -341,3 +424,23 @@ onMounted(init)
     <div class="community-cta"><div class="cta-icon">✎</div><div><strong>당신이 발견한 서울은 어떤 모습인가요?</strong><p>지금 이 순간의 동네 이야기를 들려주세요.</p></div><router-link to="/write" class="primary-button">이야기 남기기</router-link></div>
   </section>
 </template>
+
+<style scoped>
+.seoul-social-art{height:500px;isolation:isolate}.seoul-social-art:before{content:'';position:absolute;width:390px;height:390px;border-radius:50%;background:var(--yellow);left:52%;top:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 24px color-mix(in srgb,var(--yellow) 18%,transparent);z-index:-1}.social-card{position:absolute;overflow:hidden;padding:7px 7px 0;border:3px solid var(--ink);border-radius:10px;background:var(--surface);box-shadow:7px 8px 0 var(--ink);transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s ease}.social-card:hover{z-index:5;transform:translateY(-9px) rotate(0deg) scale(1.035);box-shadow:10px 13px 0 var(--ink)}.social-photo{width:100%;height:calc(100% - 34px);border-radius:5px;background-image:url('/seoul-hero-day.png');background-size:200% 200%;background-repeat:no-repeat;transition:background-image .35s ease,filter .35s ease}:global(:root[data-theme=dark]) .social-photo{background-image:url('/seoul-hero-night.png')}.photo-tower{background-position:0 0}.photo-gate{background-position:100% 0}.photo-food{background-position:0 100%}.photo-hanbok{background-position:100% 100%}.social-actions{height:34px;display:flex;align-items:center;gap:7px;padding:0 3px;font-size:12px}.social-actions button{width:24px;padding:0;border:0;background:transparent;color:var(--muted);font-size:21px;line-height:1;transition:transform .2s ease,color .2s ease}.social-actions button:hover{transform:scale(1.2)}.social-actions button.liked{color:#f05f64;animation:hero-heart .35s ease}.social-actions .comment-button{display:grid;place-items:center;height:24px;cursor:default}.comment-button i{position:relative;display:block;width:17px;height:13px;border:2px solid currentColor;border-radius:7px}.comment-button i:after{content:'';position:absolute;left:2px;bottom:-5px;width:5px;height:5px;border-left:2px solid currentColor;transform:skewY(-35deg)}.comment-button:hover i{animation:comment-wiggle .4s ease}.social-actions b{margin-left:auto;font-size:11px}.social-tower{width:205px;height:230px;left:5%;top:13%;transform:rotate(-5deg)}.social-gate{width:225px;height:180px;right:1%;top:3%;transform:rotate(4deg)}.social-food{width:185px;height:170px;left:18%;bottom:1%;transform:rotate(3deg)}.social-hanbok{width:190px;height:220px;right:6%;bottom:0;transform:rotate(-4deg)}.hero-bubble{position:absolute;z-index:7;display:grid;place-items:center;width:58px;height:58px;border:3px solid var(--ink);border-radius:50% 50% 50% 12px;background:var(--purple);color:#fff;box-shadow:5px 6px 0 var(--ink);font-size:26px;animation:hero-float 3.2s ease-in-out infinite}.bubble-camera{left:43%;top:0}.bubble-food{right:0;top:42%;width:52px;height:52px;background:var(--green);font-size:22px;animation-delay:-1s}.bubble-route{left:2%;bottom:13%;width:45px;height:45px;background:var(--yellow);color:#765c18;font-size:19px;animation-delay:-2s}@keyframes hero-heart{50%{transform:scale(1.45) rotate(-8deg)}}@keyframes comment-wiggle{25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}@keyframes hero-float{50%{transform:translateY(-8px) rotate(4deg)}}
+@media(max-width:850px){.seoul-social-art{max-width:570px;width:100%;margin:25px auto 0}.social-tower{left:8%}.social-gate{right:4%}.social-food{left:22%}.social-hanbok{right:9%}}
+@media(max-width:560px){.seoul-social-art{height:390px;transform:scale(.88);transform-origin:top center;margin-bottom:-40px}.seoul-social-art:before{width:310px;height:310px}.social-tower{width:160px;height:190px;left:3%}.social-gate{width:175px;height:145px;right:0}.social-food{width:150px;height:140px;left:16%}.social-hanbok{width:155px;height:180px;right:3%}.hero-bubble{transform:scale(.82)}}
+
+@media(min-width:851px){.hero{grid-template-columns:minmax(0,590px) minmax(0,540px);justify-content:center;column-gap:clamp(35px,4vw,75px);padding-inline:max(32px,5vw)}.seoul-social-art{width:100%;max-width:540px;margin-inline:auto}}
+
+.social-actions .like-button,.social-actions .comment-button{display:grid;place-items:center;width:25px;height:25px;color:var(--ink)}.social-actions .comment-button{cursor:default}.like-button svg,.comment-button svg{display:block;width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}.like-button.liked svg{fill:#f05f64;stroke:#f05f64}.comment-button svg{transform:scaleX(-1)}.comment-button:hover svg{animation:comment-wiggle-flipped .4s ease}.bubble-camera{background:#d8d4ff;color:#3f3b69}.bubble-food{background:#d5f3e8;color:#245e4b}.bubble-food svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}.camera-icon{position:relative;width:27px;height:19px;border:3px solid currentColor;border-radius:5px}.camera-icon:before{content:'';position:absolute;left:50%;top:50%;width:7px;height:7px;border:3px solid currentColor;border-radius:50%;transform:translate(-50%,-50%)}.camera-icon:after{content:'';position:absolute;left:3px;top:-7px;width:10px;height:6px;border:3px solid currentColor;border-bottom:0;border-radius:4px 4px 0 0}@keyframes comment-wiggle-flipped{25%{transform:scaleX(-1) rotate(-8deg)}75%{transform:scaleX(-1) rotate(8deg)}100%{transform:scaleX(-1)}}
+
+.main-map-card {
+  height: 700px;
+}
+
+@media (max-width: 560px) {
+  .main-map-card {
+    height: 680px;
+  }
+}
+</style>
