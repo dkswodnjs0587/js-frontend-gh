@@ -93,11 +93,14 @@ async function loadRecentPosts() {
         }
       })
     posts.value = recentPosts
-    recentPosts.filter(post => post.commentCount === null).forEach(async post => {
+    recentPosts.forEach(async post => {
       try {
         const comments = await getComments(post.id)
-        post.commentCount = Number(comments?.total ?? comments?.items?.length ?? 0)
-      } catch { post.commentCount = 0 }
+        const target = posts.value.find(item => item.id === post.id)
+        if (target) target.commentCount = Number(comments?.total ?? comments?.items?.length ?? 0)
+      } catch {
+        // 댓글 API를 불러오지 못하면 목록 API의 값을 유지한다.
+      }
     })
   } catch (error) {
     if (!error.unavailable) console.warn(error.message)

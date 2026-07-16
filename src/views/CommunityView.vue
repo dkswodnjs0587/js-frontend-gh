@@ -97,7 +97,7 @@ function handleTutorialKeydown(event) {
 let postRequestId = 0
 let postSearchTimer
 async function hydrateCommentCounts(items, requestId) {
-  const pending = items.filter(post => post.commentCount === null)
+  const pending = items
   let cursor = 0
   async function worker() {
     while (cursor < pending.length) {
@@ -105,7 +105,9 @@ async function hydrateCommentCounts(items, requestId) {
       try {
         const data = await getComments(post.id)
         if (requestId === postRequestId) post.commentCount = Number(data?.total ?? data?.items?.length ?? 0)
-      } catch { if (requestId === postRequestId) post.commentCount = 0 }
+      } catch {
+        // 댓글 API를 불러오지 못하면 목록 API의 값을 유지한다.
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(5, pending.length) }, worker))
