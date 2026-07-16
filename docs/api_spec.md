@@ -62,6 +62,8 @@
 - `page`: 페이지 번호, 기본값 `1`
 - `size`: 페이지 크기, 기본값 `10`
 - `keyword`: 제목 또는 본문 검색어, 선택
+- `sortBy`: 정렬 기준, `createdtime`, `viewCount`, `commentCount`, `likeCount` 중 하나, 기본값 `createdtime`
+- `sortOrder`: 정렬 방향, `asc` 또는 `desc`, 기본값 `desc`
 
 #### Response
 

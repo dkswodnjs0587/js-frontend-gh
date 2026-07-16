@@ -7,6 +7,27 @@ const query = ref('')
 const route = useRoute()
 const router = useRouter()
 const active = ref('전체')
+const sortBy = ref('createdtime')
+const sortOpen = ref(false)
+const currentPage = ref(1)
+const totalPages = ref(1)
+const totalPosts = ref(0)
+const pageSize = 10
+const sortOptions = [
+  { value: 'createdtime', label: '등록일' },
+  { value: 'viewCount', label: '조회수' },
+  { value: 'commentCount', label: '댓글' },
+  { value: 'likeCount', label: '좋아요' },
+]
+const selectedSortLabel = computed(() => sortOptions.find(option => option.value === sortBy.value)?.label || '등록일')
+const pageNumbers = computed(() => {
+  const visibleCount = Math.min(10, totalPages.value)
+  const start = Math.min(
+    Math.max(1, currentPage.value - Math.floor(visibleCount / 2)),
+    Math.max(1, totalPages.value - visibleCount + 1),
+  )
+  return Array.from({ length: visibleCount }, (_, index) => start + index)
+})
 const tutorialActive = ref(false)
 const tutorialStep = ref(0)
 const searchEl = ref(null)
@@ -119,11 +140,13 @@ async function loadPosts() {
     const data = await getPosts({
       contentTypeId: categoryIdByLabel[active.value],
       keyword: query.value.trim(),
-      page: 1,
-      size: 100,
+      page: currentPage.value,
+      size: pageSize,
+      sortBy: sortBy.value,
+      sortOrder: 'desc',
     })
     if (requestId !== postRequestId) return
-    posts.value = (data?.items || []).sort((a, b) => new Date(b.createdtime) - new Date(a.createdtime)).map(post => ({
+    posts.value = (data?.items || []).map(post => ({
       ...post,
       category: categoryById[post.contentTypeId] || '관광지',
       time: formatPostTime(post.createdtime),
@@ -131,15 +154,31 @@ async function loadPosts() {
       likeCount: Number(post.likeCount ?? post.likes ?? 0),
       commentCount: post.commentCount != null ? Number(post.commentCount) : post.commentsCount != null ? Number(post.commentsCount) : Array.isArray(post.comments) ? post.comments.length : null,
     }))
+    totalPages.value = Math.max(1, Number(data?.totalPages || 1))
+    totalPosts.value = Number(data?.total ?? posts.value.length)
     hydrateCommentCounts(posts.value, requestId)
   } catch (error) {
     if (!error.unavailable) console.warn(error.message)
   }
 }
-watch([query, active], () => {
+watch([query, active, sortBy], () => {
+  currentPage.value = 1
   clearTimeout(postSearchTimer)
   postSearchTimer = setTimeout(loadPosts, 220)
 })
+watch(currentPage, loadPosts)
+
+function changePage(page) {
+  const nextPage = Math.min(totalPages.value, Math.max(1, page))
+  if (nextPage === currentPage.value) return
+  currentPage.value = nextPage
+  nextTick(() => listEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+}
+
+function chooseSort(value) {
+  sortBy.value = value
+  sortOpen.value = false
+}
 onMounted(() => { window.addEventListener('keydown', handleTutorialKeydown); window.addEventListener('localhub:start-community-tutorial', startTutorial) })
 onMounted(async () => {
   loadPosts()
@@ -167,7 +206,9 @@ onBeforeUnmount(() => { clearTimeout(postSearchTimer); window.removeEventListene
     <div class="subpage-head"><span class="eyebrow">LOCAL STORIES</span><h1>서울 이야기 광장</h1><p>이름 대신 이야기로 만나는, 모두의 서울 커뮤니티</p></div>
     <div class="board-tools"><label ref="searchEl" :class="['search-box', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'search' }]">⌕<input v-model="query" placeholder="궁금한 이야기를 검색해보세요" /></label><router-link ref="writeEl" to="/write" :class="['primary-button', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'write' }]">＋ 글쓰기</router-link><button class="community-help" @click="startTutorial" aria-label="이야기 광장 이용 안내">?</button></div>
     <div ref="categoriesEl" :class="['category-tabs', { 'community-tutorial-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'categories' }]"><button v-for="category in categories" :key="category.label" :class="{ active: active === category.label, 'all-category': category.label === '전체' }" :style="{ '--category': category.color }" @click="active = category.label"><i></i>{{ category.label }}</button></div>
+    <div class="board-list-controls"><span>총 {{ totalPosts }}개의 이야기</span><div class="board-sort"><span>정렬</span><button type="button" class="board-sort-trigger" :aria-expanded="sortOpen" @click="sortOpen = !sortOpen"><strong>{{ selectedSortLabel }}</strong><i>{{ sortOpen ? '⌃' : '⌄' }}</i></button><div v-if="sortOpen" class="board-sort-menu"><button v-for="option in sortOptions" :key="option.value" type="button" :class="{ active: sortBy === option.value }" @click="chooseSort(option.value)">{{ option.label }}</button></div></div></div>
     <div ref="listEl" class="board-list"><router-link v-for="(post, index) in filtered" :key="post.id" :to="`/posts/${post.id}`" class="board-row"><span :class="['post-category', { 'tutorial-category-focus': tutorialActive && tutorialSteps[tutorialStep].target === 'list' && index === 0 }]" :style="{ '--tag': categoryColor(post.category) }">{{ post.category }}</span><div :class="['board-row-content', { 'community-tutorial-focus tutorial-post-content': tutorialActive && tutorialSteps[tutorialStep].target === 'list' && index === 0 }]"><h3>{{ post.title }}</h3><p>{{ post.content }}</p><div class="board-row-footer"><small>익명의 서울러 · {{ post.time }}</small><div class="post-stats" aria-label="게시글 반응"><span title="조회수">👁 {{ post.viewCount ?? 0 }}</span><span title="댓글 수">💬 {{ post.commentCount ?? post.comments ?? 0 }}</span><span title="좋아요">♡ {{ post.likeCount ?? 0 }}</span></div></div></div></router-link><div v-if="!filtered.length" class="empty-state">찾는 이야기가 아직 없어요.</div></div>
+    <nav v-if="totalPages > 1" class="board-pagination" aria-label="게시글 페이지"><button class="page-direction" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">← 이전</button><div class="page-numbers"><button v-for="page in pageNumbers" :key="page" :class="{ active: currentPage === page }" :aria-current="currentPage === page ? 'page' : undefined" @click="changePage(page)">{{ page }}</button></div><button class="page-direction" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">다음 →</button></nav>
     <div v-if="tutorialActive" class="community-tutorial-backdrop" aria-hidden="true" @click="nextTutorialStep"></div>
     <aside v-if="tutorialActive" :class="['community-tutorial-guide', { 'chatbot-step': tutorialSteps[tutorialStep].target === 'chatbot' }]" role="dialog" aria-live="polite" aria-label="이야기 광장 튜토리얼"><button class="community-tutorial-close" @click="finishTutorial"><kbd>Esc</kbd><span>×</span></button><span class="eyebrow">{{ tutorialSteps[tutorialStep].eyebrow }}</span><h3>{{ tutorialSteps[tutorialStep].title }}</h3><p>{{ tutorialSteps[tutorialStep].text }}</p><div class="community-tutorial-dots"><i v-for="(_, index) in tutorialSteps" :key="index" :class="{ active:index === tutorialStep }"></i></div><div class="community-tutorial-actions"><button v-if="tutorialStep" class="secondary-button" @click="previousTutorialStep"><kbd>Backspace</kbd>이전</button><button class="primary-button" @click="nextTutorialStep"><kbd>Space</kbd>{{ tutorialStep === tutorialSteps.length - 1 ? '사이트 이용하기' : '다음' }} <span>→</span></button></div></aside>
   </div>
@@ -183,6 +224,8 @@ onBeforeUnmount(() => { clearTimeout(postSearchTimer); window.removeEventListene
 .tutorial-post-content{background:#fff;color:#26352f;padding:12px;margin:-12px;border-radius:14px}.tutorial-post-content p,.tutorial-post-content small,.tutorial-post-content .post-stats{color:#69736e}.tutorial-category-focus{position:relative;z-index:70;background:#fff!important;color:var(--tag)!important;outline:3px solid color-mix(in srgb,var(--tag) 72%,white);outline-offset:3px;border:1px solid var(--tag)!important}
 .board-row-content{min-width:0}.board-row-footer{display:flex;align-items:center;justify-content:space-between;gap:18px;width:100%}.post-stats{display:flex;align-items:center;justify-content:flex-end;gap:13px;margin-left:auto;color:var(--muted);font:800 12px Nunito;line-height:1.3;white-space:nowrap}.post-stats span:last-child{color:var(--primary)}
 .category-tabs button.all-category.active{border-color:#000;background:#000;color:#fff;box-shadow:0 5px 13px rgba(0,0,0,.22)}.category-tabs button.all-category.active i{background:#fff}
+.board-list-controls{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:4px 0 14px;color:var(--muted);font-size:13px}.board-sort{position:relative;display:flex;align-items:center;gap:8px;font-weight:800}.board-sort-trigger{min-width:92px;height:38px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 12px;border:1px solid color-mix(in srgb,var(--primary) 18%,var(--line));border-radius:11px;background:linear-gradient(135deg,color-mix(in srgb,var(--primary) 15%,var(--surface)),color-mix(in srgb,var(--purple) 13%,var(--surface)));color:var(--ink)}.board-sort-trigger strong{font-size:12px}.board-sort-trigger i{color:var(--primary);font-style:normal}.board-sort-menu{position:absolute;z-index:12;top:44px;right:0;width:104px;padding:6px;border:1px solid var(--line);border-radius:13px;background:color-mix(in srgb,var(--surface) 98%,transparent);box-shadow:0 14px 38px rgba(34,39,50,.18);backdrop-filter:blur(14px);animation:sort-menu-in .18s ease-out}.board-sort-menu button{width:100%;display:flex;align-items:center;justify-content:space-between;padding:9px 8px;border:0;border-radius:9px;background:transparent;color:var(--ink);text-align:left;font-size:12px;font-weight:900}.board-sort-menu button:hover{background:var(--surface-2)}.board-sort-menu button.active{background:color-mix(in srgb,var(--primary) 14%,var(--surface));color:var(--primary)}.board-sort-menu button.active:after{content:'✓';font-weight:900}@keyframes sort-menu-in{from{opacity:0;transform:translateY(-5px) scale(.98)}to{opacity:1;transform:none}}.board-pagination{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:28px}.board-pagination button{height:38px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font-weight:800}.board-pagination button:hover:not(:disabled){border-color:var(--primary);color:var(--primary)}.board-pagination button:disabled{opacity:.4;cursor:default}.page-direction{padding:0 14px}.page-numbers{display:flex;align-items:center;gap:6px}.page-numbers button{width:38px;padding:0}.page-numbers button.active{border-color:var(--primary);background:var(--primary);color:#fff;box-shadow:0 5px 13px color-mix(in srgb,var(--primary) 25%,transparent)}
 @media(max-width:560px){.post-stats{justify-content:flex-end;margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}.board-row small{border-top:0!important;padding-top:0!important}}
+@media(max-width:560px){.board-list-controls{align-items:flex-start}.board-list-controls>span{padding-top:10px}.board-sort>span{display:none}.board-pagination{gap:7px;flex-wrap:wrap}.page-direction{padding:0 10px}.page-numbers{order:3;width:100%;justify-content:center;flex-wrap:wrap}.page-numbers button{width:34px;height:34px}}
 @media(max-width:560px){.board-row{display:grid;grid-template-columns:1fr;align-items:end}.board-row>.post-category{grid-column:1}.board-row>.board-row-content{grid-column:1;width:100%}.board-row-footer{align-items:flex-end}.board-row-footer .post-stats{min-width:0;margin:0 0 0 auto;padding:0;border:0}}
 </style>
