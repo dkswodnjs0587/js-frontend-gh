@@ -26,7 +26,6 @@ const recommendedQuestions = [
   '오늘 가기 좋은 서울 관광지를 추천해줘',
   '이번 주에 열리는 서울 축제를 알려줘',
   '서울에서 하루 여행 코스를 짜줘',
-  '서울의 모범 음식점을 추천해줘',
 ]
 
 function scrollToLatest() {
@@ -60,13 +59,13 @@ async function revealToken(message, token) {
 
   for (let index = 0; index < characters.length; index += batchSize) {
     message.text += characters.slice(index, index + batchSize).join('')
-    await delay(20)
+    await delay(30)
   }
 }
 
 async function requestBotAnswer(text) {
   isBotTyping.value = true
-  const streamMessage = reactive({ from: 'bot', text: '' })
+  const streamMessage = reactive({ from: 'bot', text: '', actions: null })
   try {
     messages.value.push(streamMessage)
     await sendChatStream(text, {}, {
@@ -75,6 +74,7 @@ async function requestBotAnswer(text) {
         await revealToken(streamMessage, token)
       },
     })
+    streamMessage.actions = 'tutorial-entry'
   } catch (error) {
     if (!streamMessage.text) messages.value = messages.value.filter(message => message !== streamMessage)
     await revealBotMessage(error.unavailable ? '지금은 쓰프와 연결이 어렵습니다. 잠시 후 다시 물어봐 주세요.' : error.message, 'tutorial-entry')
