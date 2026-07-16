@@ -6,6 +6,7 @@ const loading = ref(true)
 const error = ref('')
 const selectedMonth = ref('')
 const selectedFestival = ref(null)
+const imagePreviewOpen = ref(false)
 const selectedDate = ref(null)
 const detailReturnDate = ref(null)
 const districtOpen = ref(false)
@@ -153,6 +154,7 @@ function openDay(date) { selectedDate.value = startOfDay(date) }
 function showFestival(item) { detailReturnDate.value = null; selectedFestival.value = item }
 function openFestival(item) { detailReturnDate.value = selectedDate.value; selectedDate.value = null; selectedFestival.value = item }
 function closeFestivalDetail() {
+  imagePreviewOpen.value = false
   selectedFestival.value = null
   if (detailReturnDate.value) selectedDate.value = detailReturnDate.value
   detailReturnDate.value = null
@@ -193,6 +195,11 @@ function finishTutorial() { tutorialActive.value = false; document.querySelector
 function nextTutorialStep() { tutorialStep.value === tutorialSteps.length - 1 ? finishTutorial() : showTutorialStep(tutorialStep.value + 1) }
 function previousTutorialStep() { if (tutorialStep.value > 0) showTutorialStep(tutorialStep.value - 1) }
 function handleTutorialKeydown(event) {
+  if (imagePreviewOpen.value && event.key === 'Escape') {
+    event.preventDefault()
+    imagePreviewOpen.value = false
+    return
+  }
   if (!tutorialActive.value || event.repeat) return
   if (event.key === 'Escape') { event.preventDefault(); finishTutorial(); return }
   if (event.target instanceof HTMLElement && event.target.matches('input, textarea, select, [contenteditable="true"]')) return
@@ -272,10 +279,21 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleTutorialKeyd
       <transition name="detail-rise">
         <div v-if="selectedFestival" class="festival-detail-backdrop" @click.self="closeFestivalDetail">
           <article class="festival-detail" role="dialog" aria-modal="true" aria-label="축제 상세 정보">
-            <img v-if="selectedFestival.firstimage" :src="selectedFestival.firstimage" :alt="selectedFestival.title" />
+            <button v-if="selectedFestival.firstimage" type="button" class="festival-image-button" aria-label="축제 사진 크게 보기" @click="imagePreviewOpen = true"><img :src="selectedFestival.firstimage" :alt="selectedFestival.title" /><span aria-hidden="true">⌕</span></button>
             <div><span class="eyebrow">FESTIVAL INFORMATION</span><h2>{{ selectedFestival.title }}</h2><p class="detail-period">{{ formatDate(selectedFestival.start) }} — {{ formatDate(selectedFestival.end) }}</p><p>{{ formatAddress(selectedFestival) }}</p><small v-if="selectedFestival.playtime">운영 시간 · {{ selectedFestival.playtime }}</small><small v-if="selectedFestival.usetimefestival">이용 요금 · {{ selectedFestival.usetimefestival }}</small></div>
-            <button @click="closeFestivalDetail" aria-label="상세 정보 닫기">×</button>
+            <button class="festival-detail-close" @click="closeFestivalDetail" aria-label="상세 정보 닫기">×</button>
           </article>
+        </div>
+      </transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <transition name="detail-rise">
+        <div v-if="imagePreviewOpen && selectedFestival?.firstimage" class="festival-image-preview" role="dialog" aria-modal="true" aria-label="축제 사진 크게 보기" @click.self="imagePreviewOpen = false">
+          <div class="festival-image-preview-content">
+            <img :src="selectedFestival.firstimage" :alt="selectedFestival.title" />
+            <button type="button" aria-label="사진 닫기" @click="imagePreviewOpen = false">×</button>
+          </div>
         </div>
       </transition>
     </Teleport>
@@ -306,4 +324,6 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleTutorialKeyd
 .more-events-strip{background:#000;box-shadow:0 2px 7px rgba(0,0,0,.28)}.more-events-strip button{color:#fff}.more-events-strip button:hover{background:#202020}.more-events-strip button+button{border-left-color:rgba(255,255,255,.22)}
 :global(:root[data-theme=dark]) .festival-help{border-color:#555d8b!important;background:#343957!important;color:#ddd7ff!important}:global(:root[data-theme=dark]) .festival-help:hover{background:#41486d!important}:global(:root[data-theme=dark]) .more-events-strip{background:#f0eef9;box-shadow:0 2px 9px rgba(0,0,0,.4)}:global(:root[data-theme=dark]) .more-events-strip button{color:#20243a}:global(:root[data-theme=dark]) .more-events-strip button:hover{background:#d9d6e8}:global(:root[data-theme=dark]) .more-events-strip button+button{border-left-color:#bbb8ca}
 :global(:root[data-theme=dark]) .festival-page{--festival-0:#4fa183;--festival-1:#d5b84f;--festival-2:#61afd3;--festival-3:#4f82c8;--festival-4:#465a91;--festival-5:#806bc4}:global(:root[data-theme=dark]) .festival-event.color-1{color:#302a12}:global(:root[data-theme=dark]) .festival-event.color-3{color:#fff}:global(:root[data-theme=dark]) .festival-modal-backdrop{--festival-0:#4fa183;--festival-1:#d5b84f;--festival-2:#61afd3;--festival-3:#4f82c8;--festival-4:#465a91;--festival-5:#806bc4}
+.festival-image-button{position:relative;width:160px;height:110px;padding:0;overflow:hidden;border:0;border-radius:14px;background:var(--surface-2);cursor:zoom-in}.festival-image-button img{width:100%;height:100%;border-radius:0;object-fit:contain;background:transparent}.festival-image-button>span{position:absolute;right:7px;bottom:7px;width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:rgba(25,29,27,.76);color:#fff;font-size:17px;box-shadow:0 3px 10px rgba(0,0,0,.25)}.festival-image-button:hover>span{transform:scale(1.08)}.festival-image-preview{position:fixed;z-index:110;inset:0;padding:28px;display:grid;place-items:center;background:rgba(8,11,10,.82);backdrop-filter:blur(8px)}.festival-image-preview-content{position:relative;width:min(960px,100%);height:min(82dvh,760px);display:grid;place-items:center}.festival-image-preview-content img{display:block;max-width:100%;max-height:100%;object-fit:contain;border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.45)}.festival-image-preview-content button{position:absolute;top:-12px;right:-12px;width:42px;height:42px;border:1px solid rgba(255,255,255,.3);border-radius:50%;background:rgba(24,28,26,.88);color:#fff;font-size:27px;line-height:1}.festival-image-preview-content button:hover{background:#fff;color:#222}@media(max-width:720px){.festival-image-button{width:90px;height:90px}}@media(max-width:460px){.festival-detail .festival-image-button{display:block;width:100%;height:180px;grid-column:1/-1}.festival-detail .festival-image-button img{display:block}.festival-image-preview{padding:16px}.festival-image-preview-content button{top:4px;right:4px}}
+.festival-detail>.festival-image-button{align-self:center;width:160px;height:110px;padding:0;border:0;border-radius:14px;background:var(--surface-2);font-size:initial}.festival-detail>.festival-detail-close{align-self:start;width:34px;height:34px;padding:0;border:0;border-radius:50%;background:var(--surface-2);color:var(--muted);font-size:20px}@media(max-width:720px){.festival-detail>.festival-image-button{width:90px;height:90px}}@media(max-width:460px){.festival-detail>.festival-image-button{width:100%;height:180px}}
 </style>
