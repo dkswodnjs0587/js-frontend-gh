@@ -43,6 +43,9 @@ function dayDiff(from, to) { return Math.round((startOfDay(to) - startOfDay(from
 function monthKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}` }
 function formatDate(date) { return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}` }
 function dateKey(date) { return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}` }
+function formatAddress(item) {
+  return [item?.addr1, item?.addr2].map(value => String(value || '').trim()).filter(Boolean).join(' ') || '주소 정보 없음'
+}
 
 function chooseInitialMonth(items) {
   const now = startOfDay(new Date())
@@ -258,7 +261,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleTutorialKeyd
         <div v-if="selectedDate" class="festival-modal-backdrop" @click.self="selectedDate = null">
           <section class="daily-list-modal" role="dialog" aria-modal="true" aria-label="선택 날짜의 축제 목록">
             <header><div><span class="eyebrow">FESTIVALS ON THIS DAY</span><h2>{{ formatDate(selectedDate) }} 즐길 수 있는 축제</h2><p>최근에 시작한 축제부터 보여드려요.</p></div><button @click="selectedDate = null" aria-label="목록 닫기">×</button></header>
-            <div v-if="dailyFestivals.length" class="daily-festival-list"><button v-for="item in dailyFestivals" :key="item.id" @click="openFestival(item)"><span :style="{ background: `var(--festival-${item.colorIndex})` }"></span><div><strong>{{ item.title }}</strong><small>{{ formatDate(item.start) }} — {{ formatDate(item.end) }}</small><p>{{ item.eventplace || item.addr1 || '서울' }}</p></div><i>›</i></button></div>
+            <div v-if="dailyFestivals.length" class="daily-festival-list"><button v-for="item in dailyFestivals" :key="item.id" @click="openFestival(item)"><span :style="{ background: `var(--festival-${item.colorIndex})` }"></span><div><strong>{{ item.title }}</strong><small>{{ formatDate(item.start) }} — {{ formatDate(item.end) }}</small><p>{{ formatAddress(item) }}</p></div><i>›</i></button></div>
             <div v-else class="daily-empty">이날 진행되는 축제가 없습니다.</div>
           </section>
         </div>
@@ -270,7 +273,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', handleTutorialKeyd
         <div v-if="selectedFestival" class="festival-detail-backdrop" @click.self="closeFestivalDetail">
           <article class="festival-detail" role="dialog" aria-modal="true" aria-label="축제 상세 정보">
             <img v-if="selectedFestival.firstimage" :src="selectedFestival.firstimage" :alt="selectedFestival.title" />
-            <div><span class="eyebrow">FESTIVAL INFORMATION</span><h2>{{ selectedFestival.title }}</h2><p class="detail-period">{{ formatDate(selectedFestival.start) }} — {{ formatDate(selectedFestival.end) }}</p><p>{{ selectedFestival.eventplace || selectedFestival.addr1 || '서울' }}</p><small v-if="selectedFestival.playtime">운영 시간 · {{ selectedFestival.playtime }}</small><small v-if="selectedFestival.usetimefestival">이용 요금 · {{ selectedFestival.usetimefestival }}</small></div>
+            <div><span class="eyebrow">FESTIVAL INFORMATION</span><h2>{{ selectedFestival.title }}</h2><p class="detail-period">{{ formatDate(selectedFestival.start) }} — {{ formatDate(selectedFestival.end) }}</p><p>{{ formatAddress(selectedFestival) }}</p><small v-if="selectedFestival.playtime">운영 시간 · {{ selectedFestival.playtime }}</small><small v-if="selectedFestival.usetimefestival">이용 요금 · {{ selectedFestival.usetimefestival }}</small></div>
             <button @click="closeFestivalDetail" aria-label="상세 정보 닫기">×</button>
           </article>
         </div>
