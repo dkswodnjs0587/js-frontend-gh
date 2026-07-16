@@ -62,7 +62,15 @@ const fallbackPosts = [
 const posts = ref(fallbackPosts)
 const categoryById = { 12: '관광지', 14: '문화시설', 15: '축제·공연', 25: '여행코스', 28: '레포츠', 32: '숙박', 38: '쇼핑' }
 const categoryIdByLabel = Object.fromEntries(Object.entries(categoryById).map(([id, label]) => [label, id]))
-const filtered = computed(() => posts.value.filter(p => (active.value === '전체' || p.category === active.value) && (`${p.title} ${p.content}`.includes(query.value))))
+const filtered = computed(() => {
+  const items = posts.value.filter(p => (active.value === '전체' || p.category === active.value) && (`${p.title} ${p.content}`.includes(query.value)))
+  return [...items].sort((a, b) => {
+    if (sortBy.value === 'viewCount') return Number(b.viewCount || 0) - Number(a.viewCount || 0)
+    if (sortBy.value === 'commentCount') return Number(b.commentCount ?? b.comments ?? 0) - Number(a.commentCount ?? a.comments ?? 0)
+    if (sortBy.value === 'likeCount') return Number(b.likeCount || 0) - Number(a.likeCount || 0)
+    return new Date(b.createdtime || 0) - new Date(a.createdtime || 0)
+  })
+})
 const categoryColor = label => categories.find(category => category.label === label)?.color || '#6973c7'
 
 function tutorialTarget() {
